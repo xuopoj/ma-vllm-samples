@@ -1,5 +1,6 @@
 #!/bin/sh
-# Decode node 0 (AISHIPBOX_NODE_RANK=2): DP=32 master, dp-rank 0..15, kv_role=consumer.
+# Decode node 0 (AISHIPBOX_NODE_RANK=2): D-DP master of DP=32, dp-rank 0..15.
+# 16 local DP workers (one per NPU, TP=1), kv_role=consumer, kv_port=30200, engine_id=2.
 
 set -e
 : "${AISHIPBOX_CURRENT_ADDR:?run via run.sh}"
@@ -37,13 +38,28 @@ export ASCEND_BUFFER_POOL=4:8
 export USE_MULTI_BLOCK_POOL=1
 export VLLM_ASCEND_ENABLE_FUSED_MC2=1
 
-here=$(cd "$(dirname "$0")" && pwd)
-exec python3 "$here/launch_online_dp.py" \
-    --template-path "$here/run_dp_template_decode.sh" \
-    --dp-size 32 \
-    --tp-size 1 \
-    --dp-size-local 16 \
-    --dp-rank-start 0 \
-    --dp-address "$local_ip" \
-    --dp-rpc-port 12321 \
-    --vllm-start-port 7100
+exec vllm serve /root/.cache/modelscope/hub/models/vllm-ascend/DeepSeek-V4-Flash-w8a8-mtp \
+    --host 0.0.0.0 \
+    --port 7100 \
+    --data-parallel-size 32 \
+    --data-parallel-size-local 16 \
+    --data-parallel-address "$local_ip" \
+    --data-parallel-rpc-port 12321 \
+    --tensor-parallel-size 1 \
+    --enable-expert-parallel \
+    --seed 1024 \
+    --served-model-name deepseek_v4 \
+    --max-model-len 65536 \
+    --max-num-batched-tokens 144 \
+    --max-num-seqs 48 \
+    --async-scheduling \
+    --no-disable-hybrid-kv-cache-manager \
+    --no-enable-prefix-caching \
+    --trust-remote-code \
+    --gpu-memory-utilization 0.88 \
+    --quantization ascend \
+    --chat-template /root/.cache/modelscope/hub/models/vllm-ascend/DeepSeek-V4-Flash-w8a8-mtp/chat_template.jinja \
+    --speculative-config '{"num_speculative_tokens": 2, "method":"deepseek_mtp"}' \
+    --compilation-config '{"cudagraph_mode": "FULL_DECODE_ONLY","cudagraph_capture_sizes":[144]}' \
+    --additional-config '{"enable_cpu_binding": "true", "multistream_overlap_shared_expert": false, "multistream_dsa_preprocess": false}' \
+    --kv-transfer-config '{"kv_connector": "MooncakeConnectorV1", "kv_role": "kv_consumer", "kv_port": "30200", "engine_id": "2", "kv_connector_module_path": "vllm_ascend.distributed.mooncake_connector", "kv_connector_extra_config": {"prefill": {"dp_size": 16, "tp_size": 1}, "decode": {"dp_size": 32, "tp_size": 1}}}'

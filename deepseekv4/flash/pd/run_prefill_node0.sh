@@ -1,5 +1,6 @@
 #!/bin/sh
 # Prefill node 0 (AISHIPBOX_NODE_RANK=0): standalone DP=16 engine, kv_role=producer.
+# 16 local DP workers (one per NPU, TP=1), kv_port=30000, engine_id=0.
 
 set -e
 : "${AISHIPBOX_CURRENT_ADDR:?run via run.sh}"
@@ -36,17 +37,27 @@ export ASCEND_BUFFER_POOL=4:8
 export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libjemalloc.so.2:${LD_PRELOAD:-}
 export USE_MULTI_BLOCK_POOL=1
 
-# Per-prefill-engine kv-transfer knobs read by run_dp_template_prefill.sh.
-export KV_PORT=30000
-export ENGINE_ID=0
-
-here=$(cd "$(dirname "$0")" && pwd)
-exec python3 "$here/launch_online_dp.py" \
-    --template-path "$here/run_dp_template_prefill.sh" \
-    --dp-size 16 \
-    --tp-size 1 \
-    --dp-size-local 16 \
-    --dp-rank-start 0 \
-    --dp-address "$local_ip" \
-    --dp-rpc-port 12321 \
-    --vllm-start-port 7100
+exec vllm serve /root/.cache/modelscope/hub/models/vllm-ascend/DeepSeek-V4-Flash-w8a8-mtp \
+    --host 0.0.0.0 \
+    --port 7100 \
+    --data-parallel-size 16 \
+    --data-parallel-size-local 16 \
+    --data-parallel-address "$local_ip" \
+    --data-parallel-rpc-port 12321 \
+    --tensor-parallel-size 1 \
+    --enable-expert-parallel \
+    --seed 1024 \
+    --served-model-name deepseek_v4 \
+    --max-model-len 65536 \
+    --max-num-batched-tokens 8192 \
+    --max-num-seqs 4 \
+    --no-disable-hybrid-kv-cache-manager \
+    --no-enable-prefix-caching \
+    --trust-remote-code \
+    --gpu-memory-utilization 0.85 \
+    --quantization ascend \
+    --chat-template /root/.cache/modelscope/hub/models/vllm-ascend/DeepSeek-V4-Flash-w8a8-mtp/chat_template.jinja \
+    --speculative-config '{"num_speculative_tokens": 1, "method":"deepseek_mtp"}' \
+    --enforce-eager \
+    --additional-config '{"enable_cpu_binding": "true"}' \
+    --kv-transfer-config '{"kv_connector": "MooncakeConnectorV1", "kv_role": "kv_producer", "kv_port": "30000", "engine_id": "0", "kv_connector_module_path": "vllm_ascend.distributed.mooncake_connector", "kv_connector_extra_config": {"prefill": {"dp_size": 16, "tp_size": 1}, "decode": {"dp_size": 32, "tp_size": 1}}}'

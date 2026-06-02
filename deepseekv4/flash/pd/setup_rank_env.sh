@@ -5,7 +5,9 @@
 #   AISHIPBOX_NNODES        - total number of server entries across all groups
 #   AISHIPBOX_NODE_RANK     - index of this node in that flat list
 #   AISHIPBOX_ADDRS         - space-separated server_ip for every rank
-#                             (used by the decode worker to find decode master)
+#                             (used by workers to find their cluster master)
+#   AISHIPBOX_PODS          - space-separated pod_name for every rank
+#   AISHIPBOX_MY_POD        - pod_name of this node
 #   MASTER                  - "true" on the leader, "false" elsewhere
 #
 # Usage (pick one):
@@ -18,11 +20,11 @@
 #
 # Tunables:
 #   RANK_TABLE_FILE     (default: /user/global/config/global_rank_table.json)
-#   RANK_TABLE_TIMEOUT  (default: 600 seconds)
+#   RANK_TABLE_TIMEOUT  (default: 1800 seconds)
 #   RANK_TABLE_INTERVAL (default: 2 seconds)
 
 RANK_TABLE="${RANK_TABLE_FILE:-/user/global/config/global_rank_table.json}"
-RANK_TIMEOUT="${RANK_TABLE_TIMEOUT:-600}"
+RANK_TIMEOUT="${RANK_TABLE_TIMEOUT:-1800}"
 RANK_INTERVAL="${RANK_TABLE_INTERVAL:-2}"
 
 _rank_die() {
@@ -72,11 +74,14 @@ if rank is None:
     sys.exit(1)
 
 addrs = " ".join(s["server_ip"] for s in servers)
+pods = " ".join(s.get("pod_name", "") for s in servers)
 print(f'export AISHIPBOX_MASTER_ADDR={servers[0]["server_ip"]!r}')
 print(f'export AISHIPBOX_CURRENT_ADDR={servers[rank]["server_ip"]!r}')
 print(f'export AISHIPBOX_NNODES={len(servers)!r}')
 print(f'export AISHIPBOX_NODE_RANK={rank!r}')
 print(f'export AISHIPBOX_ADDRS={addrs!r}')
+print(f'export AISHIPBOX_PODS={pods!r}')
+print(f'export AISHIPBOX_MY_POD={servers[rank].get("pod_name", "")!r}')
 PYEOF
 ) || _rank_die "failed to parse rank table"
 
@@ -96,6 +101,8 @@ echo "[rank-env] AISHIPBOX_CURRENT_ADDR=$AISHIPBOX_CURRENT_ADDR"
 echo "[rank-env] AISHIPBOX_NNODES=$AISHIPBOX_NNODES"
 echo "[rank-env] AISHIPBOX_NODE_RANK=$AISHIPBOX_NODE_RANK"
 echo "[rank-env] AISHIPBOX_ADDRS=$AISHIPBOX_ADDRS"
+echo "[rank-env] AISHIPBOX_PODS=$AISHIPBOX_PODS"
+echo "[rank-env] AISHIPBOX_MY_POD=$AISHIPBOX_MY_POD"
 echo "[rank-env] MASTER=$MASTER"
 
 # If invoked with a command (i.e. not sourced), exec it so the env is inherited.
