@@ -8,6 +8,11 @@
 #                             (used by workers to find their cluster master)
 #   AISHIPBOX_PODS          - space-separated pod_name for every rank
 #   AISHIPBOX_MY_POD        - pod_name of this node
+#   AISHIPBOX_ADDR_<rank>   - server_ip of rank <rank> (ranks 0..4, if present)
+#   AISHIPBOX_POD_<rank>    - pod_name of rank <rank> (ranks 0..4, if present)
+#                             (lets launcher scripts reference a specific peer's
+#                             address directly, e.g. $AISHIPBOX_ADDR_2, instead
+#                             of parsing $AISHIPBOX_ADDRS / $AISHIPBOX_PODS)
 #   MASTER                  - "true" on the leader, "false" elsewhere
 #
 # Usage (pick one):
@@ -82,6 +87,10 @@ print(f'export AISHIPBOX_NODE_RANK={rank!r}')
 print(f'export AISHIPBOX_ADDRS={addrs!r}')
 print(f'export AISHIPBOX_PODS={pods!r}')
 print(f'export AISHIPBOX_MY_POD={servers[rank].get("pod_name", "")!r}')
+
+for i in range(min(5, len(servers))):
+    print(f'export AISHIPBOX_ADDR_{i}={servers[i]["server_ip"]!r}')
+    print(f'export AISHIPBOX_POD_{i}={servers[i].get("pod_name", "")!r}')
 PYEOF
 ) || _rank_die "failed to parse rank table"
 
@@ -103,6 +112,13 @@ echo "[rank-env] AISHIPBOX_NODE_RANK=$AISHIPBOX_NODE_RANK"
 echo "[rank-env] AISHIPBOX_ADDRS=$AISHIPBOX_ADDRS"
 echo "[rank-env] AISHIPBOX_PODS=$AISHIPBOX_PODS"
 echo "[rank-env] AISHIPBOX_MY_POD=$AISHIPBOX_MY_POD"
+for _i in 0 1 2 3 4; do
+    eval "_addr=\$AISHIPBOX_ADDR_$_i"
+    [ -n "$_addr" ] || continue
+    eval "_pod=\$AISHIPBOX_POD_$_i"
+    echo "[rank-env] AISHIPBOX_ADDR_$_i=$_addr AISHIPBOX_POD_$_i=$_pod"
+done
+unset _i _addr _pod
 echo "[rank-env] MASTER=$MASTER"
 
 # If invoked with a command (i.e. not sourced), exec it so the env is inherited.
