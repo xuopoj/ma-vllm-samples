@@ -22,6 +22,46 @@
 #                                     # (management) IP, not necessarily its
 #                                     # NPU/HCCN IP -- prefer passing the NPU
 #                                     # IP printed by step 3 on the peer node.
+#   sh check_hccn.sh -h | --help      # show this usage and exit
+
+usage() {
+    cat <<'USAGE'
+Usage: check_hccn.sh [<peer_npu_ip> | --rank N | -h|--help]
+
+Run the official A2 (8 NPUs/node) HCCN multi-node verification checks
+(see docs/source/tutorials/features/pd_disaggregation_mooncake_multi_node.md
+"Verify Multi-Node Communication Environment" -> A2 tab) on this node, tagged
+with the rank/address resolved by setup_rank_env.sh.
+
+Arguments:
+  (none)          Run the local single-node checks only (steps 1-3, 5).
+                  Step 4 (cross-node ping) is skipped.
+  <peer_npu_ip>   Also run step 4: cross-node hccn_tool ping test against
+                  this NPU IP (get it from step 3's output on the peer node).
+  --rank N        Resolve the step-4 ping target from $AISHIPBOX_ADDR_N
+                  (exported by setup_rank_env.sh from the rank table).
+                  NOTE: that is the peer's rank-table/management IP, not
+                  necessarily its NPU/HCCN IP -- prefer passing the NPU IP
+                  directly once you know it.
+  -h, --help      Show this help and exit.
+
+Steps performed:
+  1. Single-node link/health: lldp, link, net_health, netdetect, gateway
+  2. NPU HCCN configuration: cat /etc/hccn.conf
+  3. NPU IP addresses (hccn_tool -i $i -ip -g)
+  4. Cross-node ping test (only if a target is given/resolved)
+  5. NPU TLS 'switch' setting (must match across all nodes)
+
+All hccn_tool results must report 'success', and link status must be 'UP'.
+USAGE
+}
+
+case "$1" in
+    -h|--help)
+        usage
+        exit 0
+        ;;
+esac
 
 set -e
 
