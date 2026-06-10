@@ -38,6 +38,10 @@ export ASCEND_BUFFER_POOL=4:8
 export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libjemalloc.so.2:${LD_PRELOAD:-}
 export USE_MULTI_BLOCK_POOL=1
 
+# Memory tuning: gpu-memory-utilization 0.90 is the safe ceiling on A2 (0.94
+# passed init but OOM'd at runtime). If KV cache still doesn't fit with
+# max-model-len 65536, lower --max-num-batched-tokens (8192 -> 4096) instead --
+# it drives the activation peak, freeing that memory for KV cache.
 exec vllm serve /root/.cache/modelscope/hub/models/vllm-ascend/DeepSeek-V4-Flash-w8a8-mtp \
     --host 0.0.0.0 \
     --port 7100 \
@@ -55,7 +59,7 @@ exec vllm serve /root/.cache/modelscope/hub/models/vllm-ascend/DeepSeek-V4-Flash
     --no-disable-hybrid-kv-cache-manager \
     --no-enable-prefix-caching \
     --trust-remote-code \
-    --gpu-memory-utilization 0.85 \
+    --gpu-memory-utilization 0.90 \
     --quantization ascend \
     --chat-template /root/.cache/modelscope/hub/models/vllm-ascend/DeepSeek-V4-Flash-w8a8-mtp/chat_template.jinja \
     --speculative-config '{"num_speculative_tokens": 1, "method":"deepseek_mtp"}' \
