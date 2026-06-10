@@ -4,6 +4,9 @@
 #   AISHIPBOX_CURRENT_ADDR  - server_ip of this node
 #   AISHIPBOX_NNODES        - total number of server entries across all groups
 #   AISHIPBOX_NODE_RANK     - index of this node in that flat list
+#   AISHIPBOX_GROUP0_SIZE   - number of servers in the first group (ModelArts
+#                             routes service traffic only to group-0 nodes;
+#                             ranks 0..GROUP0_SIZE-1 are the group-0 nodes)
 #   AISHIPBOX_ADDRS         - space-separated server_ip for every rank
 #                             (used by workers to find their cluster master)
 #   AISHIPBOX_PODS          - space-separated pod_name for every rank
@@ -62,10 +65,12 @@ import json, os, sys
 with open(os.environ["RANK_TABLE"]) as f:
     data = json.load(f)
 
-servers = [s for g in data.get("server_group_list", []) for s in g.get("server_list", [])]
+groups = data.get("server_group_list", [])
+servers = [s for g in groups for s in g.get("server_list", [])]
 if not servers:
     sys.stderr.write("[rank-env] rank table contains no servers\n")
     sys.exit(1)
+group0_size = len(groups[0].get("server_list", [])) if groups else 0
 
 my_host = os.environ.get("MY_HOST", "")
 my_ip   = os.environ.get("MY_IP", "")
@@ -84,6 +89,7 @@ print(f'export AISHIPBOX_MASTER_ADDR={servers[0]["server_ip"]!r}')
 print(f'export AISHIPBOX_CURRENT_ADDR={servers[rank]["server_ip"]!r}')
 print(f'export AISHIPBOX_NNODES={len(servers)!r}')
 print(f'export AISHIPBOX_NODE_RANK={rank!r}')
+print(f'export AISHIPBOX_GROUP0_SIZE={group0_size!r}')
 print(f'export AISHIPBOX_ADDRS={addrs!r}')
 print(f'export AISHIPBOX_PODS={pods!r}')
 print(f'export AISHIPBOX_MY_POD={servers[rank].get("pod_name", "")!r}')
@@ -109,6 +115,7 @@ echo "[rank-env] AISHIPBOX_MASTER_ADDR=$AISHIPBOX_MASTER_ADDR"
 echo "[rank-env] AISHIPBOX_CURRENT_ADDR=$AISHIPBOX_CURRENT_ADDR"
 echo "[rank-env] AISHIPBOX_NNODES=$AISHIPBOX_NNODES"
 echo "[rank-env] AISHIPBOX_NODE_RANK=$AISHIPBOX_NODE_RANK"
+echo "[rank-env] AISHIPBOX_GROUP0_SIZE=$AISHIPBOX_GROUP0_SIZE"
 echo "[rank-env] AISHIPBOX_ADDRS=$AISHIPBOX_ADDRS"
 echo "[rank-env] AISHIPBOX_PODS=$AISHIPBOX_PODS"
 echo "[rank-env] AISHIPBOX_MY_POD=$AISHIPBOX_MY_POD"

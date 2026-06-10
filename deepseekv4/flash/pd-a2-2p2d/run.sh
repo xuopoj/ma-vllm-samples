@@ -24,6 +24,8 @@ set -e
 here=$(cd "$(dirname "$0")" && pwd)
 . "$here/setup_rank_env.sh"
 
+export USE_MULTI_GROUPS_KV_CACHE=1
+
 # Print the rank -> role | pod | ip topology so each node logs the full picture.
 echo "[run] topology (rank -> role | pod | ip):"
 i=0
@@ -35,6 +37,19 @@ for role in PREFILL_0 PREFILL_1 DECODE_0 DECODE_1; do
     printf "[run]   %d -> %-9s | %s | %s%s\n" "$i" "$role" "$pod" "$ip" "$marker"
     i=$((i+1))
 done
+
+# ModelArts routes service traffic only to group-0 nodes, so every group-0
+# node must host the PD proxy (on :8080, routing to all four engines from the
+# rank table). A correct deployment puts 1 or 2 nodes in group 0; more means
+# the grouping is wrong, so fail fast instead of leaving unroutable nodes.
+if [ "$AISHIPBOX_GROUP0_SIZE" -lt 1 ] || [ "$AISHIPBOX_GROUP0_SIZE" -gt 2 ]; then
+    echo "[run] group 0 has $AISHIPBOX_GROUP0_SIZE nodes (want 1 or 2) -- fix the deployment node grouping" >&2
+    exit 1
+fi
+if [ "$AISHIPBOX_NODE_RANK" -lt "$AISHIPBOX_GROUP0_SIZE" ]; then
+    echo "[run] this node is in group 0 -> starting PD proxy alongside the engine"
+    sh "$here/run_proxy.sh" &
+fi
 
 case "$AISHIPBOX_NODE_RANK" in
     0) exec "$here/run_prefill_node0.sh" ;;

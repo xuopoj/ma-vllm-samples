@@ -11,12 +11,12 @@
 # mooncake_hybrid_connector.py:904), the correct proxy is the *non-layerwise*
 # load_balance_proxy_server_example.py (P-first routing), NOT the layerwise one.
 #
-# The official guide also recommends colocating the proxy with a prefiller
-# instance, so by default this only launches on rank 0/1 (use --force to
-# override, e.g. for a quick local test).
+# ModelArts only routes service traffic to group-0 nodes, so by default this
+# only launches on a node inside group 0 (rank < AISHIPBOX_GROUP0_SIZE, i.e.
+# 1 or 2 nodes); use --force to override, e.g. for a quick local test.
 #
 # Usage:
-#   sh run_proxy.sh [--port 1999] [--proxy-script <path/to/load_balance_proxy_server_example.py>]
+#   sh run_proxy.sh [--port 8080] [--proxy-script <path/to/load_balance_proxy_server_example.py>]
 #                   [--engine-port 7100] [--force] [-- <extra args passed through to the proxy>]
 #   sh run_proxy.sh -h | --help
 #
@@ -35,22 +35,22 @@ setup_rank_env.sh's AISHIPBOX_ADDR_<rank>) for our symmetric A2 2P2D layout
 the official load_balance_proxy_server_example.py with those resolved values.
 
 Options:
-  --port N           Proxy listen port (default: 1999)
+  --port N           Proxy listen port (default: 8080)
   --engine-port N    vLLM engine port shared by all 4 engines (default: 7100,
                      matches --port in run_prefill_node*.sh / run_decode_node*.sh)
   --proxy-script P   Path to load_balance_proxy_server_example.py
                      (default: $PROXY_SCRIPT env var, or
                      "<this dir>/load_balance_proxy_server_example.py")
-  --force            Launch even if this node isn't a prefill node (rank 0/1).
-                     The official guide recommends colocating the proxy with
-                     a prefiller instance; --force skips that check.
+  --force            Launch even if this node isn't in group 0. ModelArts only
+                     routes service traffic to group-0 nodes, so a proxy
+                     elsewhere is unreachable; --force skips that check.
   -h, --help         Show this help and exit.
   --                 Pass all remaining arguments through to the proxy script
                      verbatim (e.g. -- --max-retries 5).
 USAGE
 }
 
-PORT=1999
+PORT=8080
 ENGINE_PORT=7100
 PROXY_SCRIPT="${PROXY_SCRIPT:-}"
 FORCE=0
@@ -88,15 +88,12 @@ fi
 : "${AISHIPBOX_ADDR_3:?rank 3 (decode1) address missing -- run via run.sh}"
 
 if [ "$FORCE" -ne 1 ]; then
-    case "$AISHIPBOX_NODE_RANK" in
-        0|1) ;;
-        *)
-            echo "[proxy] this node is rank $AISHIPBOX_NODE_RANK (a decode node)." >&2
-            echo "[proxy] the official guide recommends running the proxy alongside a prefiller instance (rank 0 or 1)." >&2
-            echo "[proxy] re-run on rank 0/1, or pass --force to launch here anyway." >&2
-            exit 1
-            ;;
-    esac
+    if [ "$AISHIPBOX_NODE_RANK" -ge "${AISHIPBOX_GROUP0_SIZE:-1}" ]; then
+        echo "[proxy] this node is rank $AISHIPBOX_NODE_RANK, outside group 0 (size ${AISHIPBOX_GROUP0_SIZE:-1})." >&2
+        echo "[proxy] ModelArts only routes service traffic to group-0 nodes, so a proxy here is unreachable." >&2
+        echo "[proxy] re-run on a group-0 node, or pass --force to launch here anyway." >&2
+        exit 1
+    fi
 fi
 
 echo "[proxy] role=PROXY rank=$AISHIPBOX_NODE_RANK addr=$AISHIPBOX_CURRENT_ADDR"
