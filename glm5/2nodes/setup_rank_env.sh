@@ -4,6 +4,18 @@
 #   AISHIPBOX_CURRENT_ADDR  - server_ip of this node
 #   AISHIPBOX_NNODES        - total number of server entries across all groups
 #   AISHIPBOX_NODE_RANK     - index of this node in that flat list
+#   AISHIPBOX_GROUP0_SIZE   - number of servers in the first group (ModelArts
+#                             routes service traffic only to group-0 nodes;
+#                             ranks 0..GROUP0_SIZE-1 are the group-0 nodes)
+#   AISHIPBOX_ADDRS         - space-separated server_ip for every rank
+#                             (used by workers to find their cluster master)
+#   AISHIPBOX_PODS          - space-separated pod_name for every rank
+#   AISHIPBOX_MY_POD        - pod_name of this node
+#   AISHIPBOX_ADDR_<rank>   - server_ip of rank <rank> (ranks 0..4, if present)
+#   AISHIPBOX_POD_<rank>    - pod_name of rank <rank> (ranks 0..4, if present)
+#                             (lets launcher scripts reference a specific peer's
+#                             address directly, e.g. $AISHIPBOX_ADDR_2, instead
+#                             of parsing $AISHIPBOX_ADDRS / $AISHIPBOX_PODS)
 #   MASTER                  - "true" on the leader, "false" elsewhere
 #
 # Usage (pick one):
@@ -16,11 +28,11 @@
 #
 # Tunables:
 #   RANK_TABLE_FILE     (default: /user/global/config/global_rank_table.json)
-#   RANK_TABLE_TIMEOUT  (default: 600 seconds)
+#   RANK_TABLE_TIMEOUT  (default: 1800 seconds)
 #   RANK_TABLE_INTERVAL (default: 2 seconds)
 
 RANK_TABLE="${RANK_TABLE_FILE:-/user/global/config/global_rank_table.json}"
-RANK_TIMEOUT="${RANK_TABLE_TIMEOUT:-600}"
+RANK_TIMEOUT="${RANK_TABLE_TIMEOUT:-1800}"
 RANK_INTERVAL="${RANK_TABLE_INTERVAL:-2}"
 
 _rank_die() {
@@ -53,10 +65,12 @@ import json, os, sys
 with open(os.environ["RANK_TABLE"]) as f:
     data = json.load(f)
 
-servers = [s for g in data.get("server_group_list", []) for s in g.get("server_list", [])]
+groups = data.get("server_group_list", [])
+servers = [s for g in groups for s in g.get("server_list", [])]
 if not servers:
     sys.stderr.write("[rank-env] rank table contains no servers\n")
     sys.exit(1)
+group0_size = len(groups[0].get("server_list", [])) if groups else 0
 
 my_host = os.environ.get("MY_HOST", "")
 my_ip   = os.environ.get("MY_IP", "")
@@ -69,10 +83,20 @@ if rank is None:
     sys.stderr.write(f"[rank-env] could not locate self (host={my_host} ip={my_ip}) in rank table\n")
     sys.exit(1)
 
+addrs = " ".join(s["server_ip"] for s in servers)
+pods = " ".join(s.get("pod_name", "") for s in servers)
 print(f'export AISHIPBOX_MASTER_ADDR={servers[0]["server_ip"]!r}')
 print(f'export AISHIPBOX_CURRENT_ADDR={servers[rank]["server_ip"]!r}')
 print(f'export AISHIPBOX_NNODES={len(servers)!r}')
 print(f'export AISHIPBOX_NODE_RANK={rank!r}')
+print(f'export AISHIPBOX_GROUP0_SIZE={group0_size!r}')
+print(f'export AISHIPBOX_ADDRS={addrs!r}')
+print(f'export AISHIPBOX_PODS={pods!r}')
+print(f'export AISHIPBOX_MY_POD={servers[rank].get("pod_name", "")!r}')
+
+for i in range(min(5, len(servers))):
+    print(f'export AISHIPBOX_ADDR_{i}={servers[i]["server_ip"]!r}')
+    print(f'export AISHIPBOX_POD_{i}={servers[i].get("pod_name", "")!r}')
 PYEOF
 ) || _rank_die "failed to parse rank table"
 
@@ -91,6 +115,17 @@ echo "[rank-env] AISHIPBOX_MASTER_ADDR=$AISHIPBOX_MASTER_ADDR"
 echo "[rank-env] AISHIPBOX_CURRENT_ADDR=$AISHIPBOX_CURRENT_ADDR"
 echo "[rank-env] AISHIPBOX_NNODES=$AISHIPBOX_NNODES"
 echo "[rank-env] AISHIPBOX_NODE_RANK=$AISHIPBOX_NODE_RANK"
+echo "[rank-env] AISHIPBOX_GROUP0_SIZE=$AISHIPBOX_GROUP0_SIZE"
+echo "[rank-env] AISHIPBOX_ADDRS=$AISHIPBOX_ADDRS"
+echo "[rank-env] AISHIPBOX_PODS=$AISHIPBOX_PODS"
+echo "[rank-env] AISHIPBOX_MY_POD=$AISHIPBOX_MY_POD"
+for _i in 0 1 2 3 4; do
+    eval "_addr=\$AISHIPBOX_ADDR_$_i"
+    [ -n "$_addr" ] || continue
+    eval "_pod=\$AISHIPBOX_POD_$_i"
+    echo "[rank-env] AISHIPBOX_ADDR_$_i=$_addr AISHIPBOX_POD_$_i=$_pod"
+done
+unset _i _addr _pod
 echo "[rank-env] MASTER=$MASTER"
 
 # If invoked with a command (i.e. not sourced), exec it so the env is inherited.
