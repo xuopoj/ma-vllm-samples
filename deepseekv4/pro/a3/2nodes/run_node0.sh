@@ -52,7 +52,7 @@ exec vllm serve /root/model \
     --max-num-seqs 32 \
     --data-parallel-size 2 \
     --data-parallel-size-local 1 \
-    --data-parallel-start-rank 0 \
+    --data-parallel-rank 0 \
     --data-parallel-address "$node0_ip" \
     --data-parallel-rpc-port 13399 \
     --tensor-parallel-size 16 \

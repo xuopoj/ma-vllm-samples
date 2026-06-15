@@ -3,7 +3,7 @@
 # Layout: 2x Atlas 800 A3 (128G x 16 NPUs), TP=16, DP=2, MTP speculative=1.
 #
 # Aligned with the official Pro 2-node reference for the UPDATED ascend image.
-# Engine flags mirror run_node0.sh exactly; only --data-parallel-start-rank
+# Engine flags mirror run_node0.sh exactly; only --data-parallel-rank
 # differs (1 here, 0 on the leader).
 #
 # Required env (set by setup_rank_env.sh, sourced by run.sh):
@@ -51,7 +51,7 @@ exec vllm serve /root/model \
     --max-num-seqs 32 \
     --data-parallel-size 2 \
     --data-parallel-size-local 1 \
-    --data-parallel-start-rank 1 \
+    --data-parallel-rank 1 \
     --data-parallel-address "$node0_ip" \
     --data-parallel-rpc-port 13399 \
     --tensor-parallel-size 16 \
