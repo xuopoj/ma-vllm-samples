@@ -1,6 +1,10 @@
 #!/bin/sh
-# Decode node 0 (AISHIPBOX_NODE_RANK=2): D-DP master of DP=32, dp-rank 0..15.
-# 16 local DP workers (one per NPU, TP=1), kv_role=consumer, kv_port=30200, engine_id=2.
+# Decode node 1 (AISHIPBOX_NODE_RANK=3): standalone DP=8 engine, kv_role=consumer.
+# 8 local DP workers (one per NPU, TP=1), kv_port=30300, engine_id=3.
+#
+# Fully standalone — its own DP leader with its own DP rendezvous, independent
+# from decode node 0 (no --headless / --data-parallel-start-rank / master-IP
+# lookup, unlike the original A3 decode-worker layout).
 
 set -e
 : "${AISHIPBOX_CURRENT_ADDR:?run via run.sh}"
@@ -16,7 +20,7 @@ if [ -z "$nic_name" ]; then
     ifconfig >&2 || true
     exit 1
 fi
-echo "[run] role=DECODE_0 nic=$nic_name local=$local_ip"
+echo "[run] role=DECODE_1 nic=$nic_name local=$local_ip"
 
 export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libjemalloc.so.2:${LD_PRELOAD:-}
 export HCCL_OP_EXPANSION_MODE="AIV"
@@ -38,11 +42,16 @@ export ASCEND_BUFFER_POOL=4:8
 export USE_MULTI_BLOCK_POOL=1
 export VLLM_ASCEND_ENABLE_FUSED_MC2=1
 
-exec vllm serve /root/.cache/modelscope/hub/models/vllm-ascend/DeepSeek-V4-Flash-w8a8-mtp \
+# Mooncake installs ascend_transport.so to /usr/local/lib, which is not in
+# the ldconfig cache; ModelArts launches via sh (no login-shell env), so
+# put it on the linker path explicitly or TransferEngine import fails.
+export LD_LIBRARY_PATH=/usr/local/lib:${LD_LIBRARY_PATH:-}
+
+exec vllm serve /root/model \
     --host 0.0.0.0 \
     --port 7100 \
-    --data-parallel-size 32 \
-    --data-parallel-size-local 16 \
+    --data-parallel-size 8 \
+    --data-parallel-size-local 8 \
     --data-parallel-address "$local_ip" \
     --data-parallel-rpc-port 12321 \
     --tensor-parallel-size 1 \
@@ -58,8 +67,8 @@ exec vllm serve /root/.cache/modelscope/hub/models/vllm-ascend/DeepSeek-V4-Flash
     --trust-remote-code \
     --gpu-memory-utilization 0.88 \
     --quantization ascend \
-    --chat-template /root/.cache/modelscope/hub/models/vllm-ascend/DeepSeek-V4-Flash-w8a8-mtp/chat_template.jinja \
+    --chat-template /root/model/chat_template.jinja \
     --speculative-config '{"num_speculative_tokens": 2, "method":"deepseek_mtp"}' \
     --compilation-config '{"cudagraph_mode": "FULL_DECODE_ONLY","cudagraph_capture_sizes":[144]}' \
     --additional-config '{"enable_cpu_binding": "true", "multistream_overlap_shared_expert": false, "multistream_dsa_preprocess": false}' \
-    --kv-transfer-config '{"kv_connector": "MooncakeConnectorV1", "kv_role": "kv_consumer", "kv_port": "30200", "engine_id": "2", "kv_connector_module_path": "vllm_ascend.distributed.mooncake_connector", "kv_connector_extra_config": {"prefill": {"dp_size": 16, "tp_size": 1}, "decode": {"dp_size": 32, "tp_size": 1}}}'
+    --kv-transfer-config '{"kv_connector": "MooncakeHybridConnector", "kv_role": "kv_consumer", "kv_port": "30300", "engine_id": "3", "kv_connector_extra_config": {"prefill": {"dp_size": 8, "tp_size": 1}, "decode": {"dp_size": 8, "tp_size": 1}}}'

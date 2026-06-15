@@ -38,11 +38,16 @@ export ASCEND_BUFFER_POOL=4:8
 export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libjemalloc.so.2:${LD_PRELOAD:-}
 export USE_MULTI_BLOCK_POOL=1
 
+# Mooncake installs ascend_transport.so to /usr/local/lib, which is not in
+# the ldconfig cache; ModelArts launches via sh (no login-shell env), so
+# put it on the linker path explicitly or TransferEngine import fails.
+export LD_LIBRARY_PATH=/usr/local/lib:${LD_LIBRARY_PATH:-}
+
 # Memory tuning: gpu-memory-utilization 0.90 is the safe ceiling on A2 (0.94
 # passed init but OOM'd at runtime). If KV cache still doesn't fit with
 # max-model-len 65536, lower --max-num-batched-tokens (8192 -> 4096) instead --
 # it drives the activation peak, freeing that memory for KV cache.
-exec vllm serve /root/.cache/modelscope/hub/models/vllm-ascend/DeepSeek-V4-Flash-w8a8-mtp \
+exec vllm serve /root/model \
     --host 0.0.0.0 \
     --port 7100 \
     --data-parallel-size 8 \
@@ -61,7 +66,7 @@ exec vllm serve /root/.cache/modelscope/hub/models/vllm-ascend/DeepSeek-V4-Flash
     --trust-remote-code \
     --gpu-memory-utilization 0.90 \
     --quantization ascend \
-    --chat-template /root/.cache/modelscope/hub/models/vllm-ascend/DeepSeek-V4-Flash-w8a8-mtp/chat_template.jinja \
+    --chat-template /root/model/chat_template.jinja \
     --speculative-config '{"num_speculative_tokens": 1, "method":"deepseek_mtp"}' \
     --enforce-eager \
     --additional-config '{"enable_cpu_binding": "true"}' \

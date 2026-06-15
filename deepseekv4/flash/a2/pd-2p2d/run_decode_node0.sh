@@ -42,7 +42,12 @@ export ASCEND_BUFFER_POOL=4:8
 export USE_MULTI_BLOCK_POOL=1
 export VLLM_ASCEND_ENABLE_FUSED_MC2=1
 
-exec vllm serve /root/.cache/modelscope/hub/models/vllm-ascend/DeepSeek-V4-Flash-w8a8-mtp \
+# Mooncake installs ascend_transport.so to /usr/local/lib, which is not in
+# the ldconfig cache; ModelArts launches via sh (no login-shell env), so
+# put it on the linker path explicitly or TransferEngine import fails.
+export LD_LIBRARY_PATH=/usr/local/lib:${LD_LIBRARY_PATH:-}
+
+exec vllm serve /root/model \
     --host 0.0.0.0 \
     --port 7100 \
     --data-parallel-size 8 \
@@ -62,7 +67,7 @@ exec vllm serve /root/.cache/modelscope/hub/models/vllm-ascend/DeepSeek-V4-Flash
     --trust-remote-code \
     --gpu-memory-utilization 0.88 \
     --quantization ascend \
-    --chat-template /root/.cache/modelscope/hub/models/vllm-ascend/DeepSeek-V4-Flash-w8a8-mtp/chat_template.jinja \
+    --chat-template /root/model/chat_template.jinja \
     --speculative-config '{"num_speculative_tokens": 2, "method":"deepseek_mtp"}' \
     --compilation-config '{"cudagraph_mode": "FULL_DECODE_ONLY","cudagraph_capture_sizes":[144]}' \
     --additional-config '{"enable_cpu_binding": "true", "multistream_overlap_shared_expert": false, "multistream_dsa_preprocess": false}' \

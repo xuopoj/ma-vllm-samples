@@ -36,6 +36,7 @@ Usage:
 import argparse
 import json
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -69,7 +70,10 @@ def run_via_proxy(args) -> int:
     }
     print(f"[smoke-test] POST {url}  (prompt={args.prompt!r}, max_tokens={args.max_tokens})")
     print("[smoke-test] (the proxy performs prefill -> KV-transfer -> decode internally and load-balances)")
+    t0 = time.perf_counter()
     resp = post_json(url, req, args.timeout)
+    elapsed = time.perf_counter() - t0
+    print(f"[smoke-test]    end-to-end {elapsed:.2f}s (prefill + KV transfer + decode of {args.max_tokens} tokens)")
     text = extract_text(resp)
     if text is None:
         print(f"[smoke-test] FAIL: proxy response has no choices[0].text:\n{json.dumps(resp, indent=2)}", file=sys.stderr)
@@ -101,7 +105,9 @@ def run_direct(args) -> int:
         },
     }
     print(f"[smoke-test] 1. POST {prefill_url}  (prompt={args.prompt!r}, max_tokens=1, do_remote_decode=true)")
+    t0 = time.perf_counter()
     prefill_resp = post_json(prefill_url, prefill_req, args.timeout)
+    print(f"[smoke-test]    prefill {time.perf_counter() - t0:.2f}s (pure prefill-engine time, no KV transfer yet)")
     kv_transfer_params = prefill_resp.get("kv_transfer_params")
     if not kv_transfer_params:
         print(
@@ -119,7 +125,12 @@ def run_direct(args) -> int:
         "kv_transfer_params": kv_transfer_params,
     }
     print(f"[smoke-test] 2. POST {decode_url}  (max_tokens={args.max_tokens}, kv_transfer_params from step 1)")
+    t0 = time.perf_counter()
     decode_resp = post_json(decode_url, decode_req, args.timeout)
+    decode_elapsed = time.perf_counter() - t0
+    print(f"[smoke-test]    decode {decode_elapsed:.2f}s for up to {args.max_tokens} tokens (includes the KV pull"
+          f" from the prefiller -- if huge, grep the decode log for 'KV cache transfer for request' (transfer ms)"
+          f" and 'Got invalid KVTransferParams' (silent local-recompute fallback))")
     text = extract_text(decode_resp)
     if text is None:
         print(

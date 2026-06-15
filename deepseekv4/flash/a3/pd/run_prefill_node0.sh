@@ -1,7 +1,6 @@
 #!/bin/sh
-# Prefill node 1 (AISHIPBOX_NODE_RANK=1): standalone DP=16 engine, kv_role=producer.
-# Separate engine from prefill node 0: this node is its own DP leader, with its
-# own DP rendezvous, kv_port=30100, engine_id=1.
+# Prefill node 0 (AISHIPBOX_NODE_RANK=0): standalone DP=16 engine, kv_role=producer.
+# 16 local DP workers (one per NPU, TP=1), kv_port=30000, engine_id=0.
 
 set -e
 : "${AISHIPBOX_CURRENT_ADDR:?run via run.sh}"
@@ -17,7 +16,7 @@ if [ -z "$nic_name" ]; then
     ifconfig >&2 || true
     exit 1
 fi
-echo "[run] role=PREFILL_1 nic=$nic_name local=$local_ip"
+echo "[run] role=PREFILL_0 nic=$nic_name local=$local_ip"
 
 export HCCL_OP_EXPANSION_MODE="AIV"
 export HCCL_IF_IP="$local_ip"
@@ -38,7 +37,12 @@ export ASCEND_BUFFER_POOL=4:8
 export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libjemalloc.so.2:${LD_PRELOAD:-}
 export USE_MULTI_BLOCK_POOL=1
 
-exec vllm serve /root/.cache/modelscope/hub/models/vllm-ascend/DeepSeek-V4-Flash-w8a8-mtp \
+# Mooncake installs ascend_transport.so to /usr/local/lib, which is not in
+# the ldconfig cache; ModelArts launches via sh (no login-shell env), so
+# put it on the linker path explicitly or TransferEngine import fails.
+export LD_LIBRARY_PATH=/usr/local/lib:${LD_LIBRARY_PATH:-}
+
+exec vllm serve /root/model \
     --host 0.0.0.0 \
     --port 7100 \
     --data-parallel-size 16 \
@@ -57,8 +61,8 @@ exec vllm serve /root/.cache/modelscope/hub/models/vllm-ascend/DeepSeek-V4-Flash
     --trust-remote-code \
     --gpu-memory-utilization 0.85 \
     --quantization ascend \
-    --chat-template /root/.cache/modelscope/hub/models/vllm-ascend/DeepSeek-V4-Flash-w8a8-mtp/chat_template.jinja \
+    --chat-template /root/model/chat_template.jinja \
     --speculative-config '{"num_speculative_tokens": 1, "method":"deepseek_mtp"}' \
     --enforce-eager \
     --additional-config '{"enable_cpu_binding": "true"}' \
-    --kv-transfer-config '{"kv_connector": "MooncakeConnectorV1", "kv_role": "kv_producer", "kv_port": "30100", "engine_id": "1", "kv_connector_module_path": "vllm_ascend.distributed.mooncake_connector", "kv_connector_extra_config": {"prefill": {"dp_size": 16, "tp_size": 1}, "decode": {"dp_size": 32, "tp_size": 1}}}'
+    --kv-transfer-config '{"kv_connector": "MooncakeConnectorV1", "kv_role": "kv_producer", "kv_port": "30000", "engine_id": "0", "kv_connector_module_path": "vllm_ascend.distributed.mooncake_connector", "kv_connector_extra_config": {"prefill": {"dp_size": 16, "tp_size": 1}, "decode": {"dp_size": 32, "tp_size": 1}}}'
