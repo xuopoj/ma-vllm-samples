@@ -44,9 +44,9 @@ export VLLM_ASCEND_ENABLE_FLASHCOMM1=1
 
 exec vllm serve /root/model \
     --safetensors-load-strategy 'prefetch' \
-    --max-model-len 135000 \
+    --max-model-len 1048576 \
     --max-num-batched-tokens 4096 \
-    --served-model-name dsv4 \
+    --served-model-name deepseek_v4 \
     --gpu-memory-utilization 0.9 \
     --max-num-seqs 32 \
     --data-parallel-size 2 \
