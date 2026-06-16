@@ -33,16 +33,17 @@ md5 template/setup_rank_env.sh */*/*/*/setup_rank_env.sh   # all must match
 
 ## Verified status
 
-**Only `deepseekv4/flash/a3` has been verified end-to-end on real hardware.**
-Everything else is derived from it but **untested** — a starting point, not a
-known-good config. Run `check_hccn.sh` on every node and confirm the API
-responds before relying on any `⚠` layout, and update this matrix when you do.
+**Only the `deepseekv4/flash/a3` `1node` / `2nodes` / `pd-1p1d` layouts have
+been verified end-to-end on real hardware.** Everything else — including
+`flash/a3/pd` — is derived but **untested**: a starting point, not a known-good
+config. Run `check_hccn.sh` on every node and confirm the API responds before
+relying on any `⚠` layout, and update this matrix when you do.
 
 | Model | Variant | Platform | Layout | Status |
 |-------|---------|----------|--------|--------|
 | DeepSeek-V4 | flash | **a3** | 1node | ✅ verified |
 | DeepSeek-V4 | flash | **a3** | 2nodes | ✅ verified |
-| DeepSeek-V4 | flash | **a3** | pd (2P1D) | ✅ verified |
+| DeepSeek-V4 | flash | a3 | pd (2P1D) | ⚠ untested |
 | DeepSeek-V4 | flash | **a3** | pd-1p1d | ✅ verified |
 | DeepSeek-V4 | flash | a2 | 2nodes | ⚠ untested |
 | DeepSeek-V4 | flash | a2 | pd-1p2d | ⚠ untested |
