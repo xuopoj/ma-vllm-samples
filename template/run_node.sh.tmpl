@@ -1,0 +1,56 @@
+#!/bin/sh
+# TEMPLATE — a single per-role launcher (leader / headless worker / prefill /
+# decode). Copy into a layout dir, rename to run_<role>_node<N>.sh, drop ".tmpl",
+# and fill the {{...}} placeholders. Always invoked through run.sh, so the
+# AISHIPBOX_* env from setup_rank_env.sh is already in scope.
+#
+# The preamble (NIC resolution + HCCL socket binding) is the SAME for every role
+# and every layout — it is the spine. Only the `vllm serve` flags below it change
+# per role. Keep the preamble verbatim; edit only the engine block.
+#
+# Placeholders:
+#   {{ROLE}}          label for logs: LEADER | HEADLESS | PREFILL_0 | DECODE_0 ...
+#   {{IP_SOURCE}}     where this node's own IP comes from:
+#                       leader / standalone master -> $AISHIPBOX_CURRENT_ADDR
+#                       headless worker            -> $AISHIPBOX_ADDR_<leader_rank>
+#                                                     (it must rendezvous with the
+#                                                      DP master, not bind itself)
+#   {{ENGINE_ENV}}    role-specific exports (HCCL_BUFFSIZE, ASCEND_*, USE_*, ...)
+#   {{VLLM_FLAGS}}    the `vllm serve /root/model ...` flag block for this role
+
+set -e
+: "${AISHIPBOX_CURRENT_ADDR:?run via run.sh}"
+
+local_ip="{{IP_SOURCE}}"
+
+# Resolve the NIC name for local_ip — HCCL/GLOO/TP all bind to it by name.
+nic_name=$(ifconfig 2>/dev/null | awk -v ip="$local_ip" '
+    /^[^[:space:]]/ { iface=$1; sub(":","",iface) }
+    $1=="inet" && $2==ip { print iface; exit }
+')
+if [ -z "$nic_name" ]; then
+    echo "[run] could not find NIC for $local_ip" >&2
+    ifconfig >&2 || true
+    exit 1
+fi
+echo "[run] role={{ROLE}} nic=$nic_name local=$local_ip"
+
+# --- spine socket binding (same for every role) ---
+export HCCL_IF_IP="$local_ip"
+export GLOO_SOCKET_IFNAME="$nic_name"
+export TP_SOCKET_IFNAME="$nic_name"
+export HCCL_SOCKET_IFNAME="$nic_name"
+export HCCL_OP_EXPANSION_MODE="AIV"
+export VLLM_ENGINE_READY_TIMEOUT_S=1800
+# Cross-node DP rendezvous + EP all-to-all need generous timeouts.
+export HCCL_EXEC_TIMEOUT=2000
+export HCCL_CONNECT_TIMEOUT=1200
+export PYTORCH_NPU_ALLOC_CONF=expandable_segments:True
+export OMP_PROC_BIND=false
+export OMP_NUM_THREADS=10
+
+# --- role-specific engine env ---
+{{ENGINE_ENV}}
+
+exec vllm serve /root/model \
+{{VLLM_FLAGS}}
