@@ -1,7 +1,7 @@
 #!/bin/sh
-# Single-node GLM-5.1 launcher. TP=16 on one Atlas 800 A3 node's 16 NPUs.
+# GLM-5.1 单机启动脚本。在一台 Atlas 800 A3 节点的 16 张 NPU 上 TP=16。
 #
-# Usage (on the node's ModelArts service command):
+# 用法（该节点的 ModelArts 服务命令）：
 #   sh /root/script/run.sh
 
 set -e

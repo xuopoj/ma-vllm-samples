@@ -1,22 +1,22 @@
 #!/bin/sh
-# Entry point for DeepSeek-V4-Flash P-D disaggregation on A3 (16 NPUs/node),
-# 1P1D with EXTERNAL online DP, mirroring the official guide ("Prefill-Decode
-# Disaggregation ... 1P1D for better performance" + launch_online_dp.py):
-#   rank 0 -> prefill: 4 standalone vllm instances (DP=4, TP=4, 4 NPUs each),
-#             API ports 7100..7103, kv_producer, kv_port=36000, engine_id=0
-#   rank 1 -> decode: 16 standalone vllm instances (DP=16, TP=1, 1 NPU each),
-#             API ports 7100..7115, kv_consumer, kv_port=36100, engine_id=1
+# DeepSeek-V4-Flash P-D 分离在 A3（16 NPU/节点）上的入口脚本，
+# 采用外置 online DP 的 1P1D，对齐官方指南（"Prefill-Decode Disaggregation
+# ... 1P1D for better performance" + launch_online_dp.py）：
+#   rank 0 -> prefill: 4 个独立 vllm 实例 (DP=4, TP=4, 每个 4 张 NPU),
+#             API 端口 7100..7103, kv_producer, kv_port=36000, engine_id=0
+#   rank 1 -> decode: 16 个独立 vllm 实例 (DP=16, TP=1, 每个 1 张 NPU),
+#             API 端口 7100..7115, kv_consumer, kv_port=36100, engine_id=1
 #
-# Every instance is its own API server, joined into its role's DP group via
-# --data-parallel-rank; the proxy load-balances across all 20 endpoints.
-# kv_connector_extra_config is asymmetric and identical on both roles:
+# 每个实例各自是一个 API server，通过 --data-parallel-rank 加入本角色的 DP 组；
+# proxy 在全部 20 个端点间做负载均衡。
+# kv_connector_extra_config 非对称，但两个角色都相同：
 #   {"prefill": {"dp_size": 4, "tp_size": 4}, "decode": {"dp_size": 16, "tp_size": 1}}
 #
-# Deviations from the guide (see template headers): kv_port 36000/36100
-# instead of 30000/30100 (official kv_port table: 16-NPU nodes reserve
-# [20000, 36000) for AscendDirectTransport), served-model-name deepseek_v4.
+# 相对指南的改动（见 template 头注释）：kv_port 用 36000/36100 而非 30000/30100
+#（官方 kv_port 表：16 NPU 节点把 [20000, 36000) 预留给 AscendDirectTransport），
+# served-model-name 用 deepseek_v4。
 #
-# Usage (same command on both nodes' ModelArts service):
+# 用法（两个节点的 ModelArts 服务执行同一条命令）：
 #   sh /root/script/run.sh
 
 set -e
@@ -32,16 +32,20 @@ if [ "$AISHIPBOX_NNODES" != 2 ]; then
 fi
 
 # Print the rank -> role | pod | ip topology so each node logs the full picture.
-echo "[run] topology (rank -> role | pod | ip):"
-i=0
-for role in PREFILL_0 DECODE_0; do
-    pod=$(echo "$AISHIPBOX_PODS"  | awk -v n=$((i+1)) '{print $n}')
-    ip=$(echo  "$AISHIPBOX_ADDRS" | awk -v n=$((i+1)) '{print $n}')
-    marker=""
-    [ "$i" = "$AISHIPBOX_NODE_RANK" ] && marker=" <- me"
-    printf "[run]   %d -> %-9s | %s | %s%s\n" "$i" "$role" "$pod" "$ip" "$marker"
-    i=$((i+1))
-done
+# 拓扑信息同时打到 stdout 和 env.log（$ENV_LOG 由 setup_rank_env.sh 导出），
+# 否则很快会被 vLLM 日志冲掉。
+{
+    echo "[run] topology (rank -> role | pod | ip):"
+    i=0
+    for role in PREFILL_0 DECODE_0; do
+        pod=$(echo "$AISHIPBOX_PODS"  | awk -v n=$((i+1)) '{print $n}')
+        ip=$(echo  "$AISHIPBOX_ADDRS" | awk -v n=$((i+1)) '{print $n}')
+        marker=""
+        [ "$i" = "$AISHIPBOX_NODE_RANK" ] && marker=" <- me"
+        printf "[run]   %d -> %-9s | %s | %s%s\n" "$i" "$role" "$pod" "$ip" "$marker"
+        i=$((i+1))
+    done
+} | tee -a "${ENV_LOG:-/dev/null}"
 
 # ModelArts routes service traffic only to group-0 nodes, so every group-0
 # node must host the PD proxy (on :8080, routing to all 20 per-instance

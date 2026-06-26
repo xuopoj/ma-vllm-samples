@@ -1,15 +1,14 @@
 #!/bin/sh
-# Entry point for DeepSeek-V4-Flash on 2x Atlas 800 A3 (16 NPUs/node, 32 total).
-# ONE mixed engine (no P-D disaggregation): DP=8, TP=4 spanning both nodes —
-# the same DP=4xTP=4-per-node layout as a3/1node, doubled.
-#   rank 0 -> leader   (dp-ranks 0..3, API server on :8080)
-#   rank 1 -> headless (dp-ranks 4..7, rendezvous with rank 0; no API server)
+# DeepSeek-V4-Flash 在 2 台 Atlas 800 A3（16 NPU/节点，共 32）上的入口脚本。
+# 单一混合引擎（无 P-D 分离）：DP=8, TP=4，横跨两节点——
+# 即 a3/1node 的 DP=4xTP=4/节点布局翻倍。
+#   rank 0 -> leader   (dp-rank 0..3, API server 在 :8080)
+#   rank 1 -> headless (dp-rank 4..7, 与 rank 0 汇合；自身不起 API server)
 #
-# No proxy: clients hit the leader's :8080 directly. ModelArts routes service
-# traffic only to group-0 nodes and the headless node cannot serve, so group 0
-# must contain ONLY node 0 (checked below).
+# 无 proxy：客户端直接请求 leader 的 :8080。ModelArts 只把服务流量路由到
+# group 0，而 headless 节点无法对外服务，所以 group 0 必须只含 node 0（下方校验）。
 #
-# Usage (same command on both nodes' ModelArts service):
+# 用法（两个节点的 ModelArts 服务执行同一条命令）：
 #   sh /root/script/run.sh
 
 set -e

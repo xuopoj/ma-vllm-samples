@@ -1,20 +1,18 @@
 #!/bin/sh
-# Single-node DeepSeek-V4-Flash launcher on 1x Atlas 800 A3 (16 NPUs).
-# Layout: DP=4, TP=4 (DP * TP = 16 NPUs on this node).
+# DeepSeek-V4-Flash 在 1 台 Atlas 800 A3（16 NPU）上的单机启动脚本。
+# 布局：DP=4, TP=4（DP * TP = 本节点 16 张 NPU）。
 #
-# Aligned with the official A3 1node reference for the UPDATED ascend image
-# (the one shipping vllm-ascend with patch_balance_schedule.py, python
-# 3.11.15). The previous env block (ACL_OP_INIT_MODE, ASCEND_A3_ENABLE,
-# USE_MULTI_BLOCK_POOL, USE_MULTI_GROUPS_KV_CACHE, VLLM_ASCEND_ENABLE_FUSED_MC2)
-# was dropped per the new reference -- those toggles no longer apply.
+# 对齐官方 A3 1node 参考配置（针对更新后的 ascend 镜像——即随附
+# patch_balance_schedule.py、python 3.11.15 的 vllm-ascend 版本）。按新参考
+# 删掉了旧的 env 块（ACL_OP_INIT_MODE、ASCEND_A3_ENABLE、USE_MULTI_BLOCK_POOL、
+# USE_MULTI_GROUPS_KV_CACHE、VLLM_ASCEND_ENABLE_FUSED_MC2）——这些开关已不再适用。
 #
-# Deliberate deviations from the reference:
-#   - model path /root/model (repo convention, not the modelscope cache path)
-#   - --port 8080 (ModelArts service port; reference uses 8900)
-#   - --served-model-name deepseek_v4 (matches the other deployments here;
-#     reference uses dsv4)
+# 相对参考配置的有意改动：
+#   - 模型路径 /root/model（本仓库约定，不用 modelscope 缓存路径）
+#   - --port 8080（ModelArts 服务端口；参考用 8900）
+#   - --served-model-name deepseek_v4（与本仓库其它部署一致；参考用 dsv4）
 #
-# Usage (on the node's ModelArts service command):
+# 用法（该节点的 ModelArts 服务命令）：
 #   sh /root/script/run.sh
 
 set -e

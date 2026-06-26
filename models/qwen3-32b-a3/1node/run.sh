@@ -1,7 +1,7 @@
 #!/bin/sh
-# Single-node Qwen3-32B launcher. TP=8 on one node's 8 NPUs.
+# Qwen3-32B 单机启动脚本。在一台节点的 8 张 NPU 上 TP=8。
 #
-# Usage (on the node's ModelArts service command):
+# 用法（该节点的 ModelArts 服务命令）：
 #   sh /root/script/run.sh
 
 set -e

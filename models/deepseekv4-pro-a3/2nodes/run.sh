@@ -1,9 +1,9 @@
 #!/bin/sh
-# Entry point for DeepSeek-V4-Pro-w4a8-mtp on 2x Atlas 800 A3.
-# Sources setup_rank_env.sh (sets AISHIPBOX_* + MASTER from the rank table),
-# then execs the leader or worker script.
+# DeepSeek-V4-Pro-w4a8-mtp 在 2 台 Atlas 800 A3 上的入口脚本。
+# source setup_rank_env.sh（从 rank table 设置 AISHIPBOX_* + MASTER），
+# 然后 exec leader 或 worker 脚本。
 #
-# Usage (same command on every node's ModelArts service):
+# 用法（每个节点的 ModelArts 服务执行同一条命令）：
 #   sh /root/script/run.sh
 
 set -e
