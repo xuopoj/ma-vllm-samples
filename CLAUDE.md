@@ -70,11 +70,18 @@ node/group counts, then `exec`s the per-role launcher for `AISHIPBOX_NODE_RANK`.
 
 ## Bringing up a NEW model or platform
 
-Only `deepseekv4/flash/a3` is **verified on real hardware** (see README status
-matrix). Everything else is derived-but-untested — treat it as a starting point,
-not a known-good config. To add a new deployment:
+Only `models/deepseekv4-flash-a3` is **verified on real hardware** (see README
+status matrix). Everything else is derived-but-untested — treat it as a starting
+point, not a known-good config.
 
-1. **Pick the closest verified layout** as the base (e.g. `deepseekv4/flash/a3/2nodes`).
+The reference configs come from the **official vLLM-Ascend per-model tutorials**
+(`https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/<Model>.html`,
+e.g. `DeepSeek-V4-Flash.html`). When adding a deployment by extracting the
+upstream config and adapting it to this repo's spine/conventions, use the
+**`new-deployment` skill** — it has the full extract-and-adapt procedure. The
+steps below are the condensed version:
+
+1. **Pick the closest verified layout** as the base (e.g. `models/deepseekv4-flash-a3/2nodes`).
 2. **Copy the spine verbatim** from `template/`:
    `cp template/setup_rank_env.sh template/check_hccn.sh <new_layout>/`.
 3. **Start from `run.sh.tmpl` / `run_node.sh.tmpl`** if no close base exists; keep
