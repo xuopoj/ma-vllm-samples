@@ -36,6 +36,19 @@ here=$(cd "$(dirname "$0")" && pwd)
     done
 } | tee -a "${ENV_LOG:-/dev/null}"
 
+# ModelArts routes service traffic only to group-0 nodes, so every group-0
+# node must host the PD proxy (on :8080, routing to the 2 prefill + 1 decode
+# endpoints from the rank table). A correct deployment puts 1 or 2 nodes in
+# group 0; more means the grouping is wrong, so fail fast.
+if [ "$AISHIPBOX_GROUP0_SIZE" -lt 1 ] || [ "$AISHIPBOX_GROUP0_SIZE" -gt 2 ]; then
+    echo "[run] group 0 has $AISHIPBOX_GROUP0_SIZE nodes (want 1 or 2) -- fix the deployment node grouping" >&2
+    exit 1
+fi
+if [ "$AISHIPBOX_NODE_RANK" -lt "$AISHIPBOX_GROUP0_SIZE" ]; then
+    echo "[run] this node is in group 0 -> starting PD proxy alongside the engine"
+    sh "$here/run_proxy.sh" &
+fi
+
 case "$AISHIPBOX_NODE_RANK" in
     0) exec "$here/run_prefill_node0.sh" ;;
     1) exec "$here/run_prefill_node1.sh" ;;
