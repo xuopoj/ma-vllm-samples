@@ -2,7 +2,7 @@
 
 Canonical, model-agnostic building blocks shared by every vLLM-Ascend
 deployment in this repo. **This is the source of truth.** Per-layout
-directories under `deepseekv4/`, `glm5/`, etc. hold *real copies* of these files
+directories under `models/<model-variant-platform>/` hold *real copies* of these files
 (ModelArts copies the layout dir flat to `/root/script`, so symlinks would not
 survive — every layout must be self-contained). When you change the spine,
 change it here first, then re-copy into each layout.

@@ -1,3 +1,6 @@
 .venv/
 
 .DS_Store
+
+# 运行时由 setup_rank_env.sh / run.sh 写出的节点拓扑日志
+env.log

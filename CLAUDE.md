@@ -2,9 +2,12 @@
 
 This repo holds ModelArts launch scripts for serving large MoE models
 (DeepSeek-V4, GLM-5, Qwen3) on Huawei Atlas 800 A2 (8 NPU/node) and A3 (16
-NPU/node) hardware via vLLM-Ascend. Each `<model>/<variant>/<platform>/<layout>`
-directory is a self-contained deployment that ModelArts copies flat to
-`/root/script` and runs with `sh /root/script/run.sh` on every node.
+NPU/node) hardware via vLLM-Ascend. Each
+`models/<model-variant-platform>/<layout>` directory is a self-contained
+deployment that ModelArts copies flat to `/root/script` and runs with
+`sh /root/script/run.sh` on every node. The model dir flattens model, variant,
+and platform into one segment (e.g. `deepseekv4-flash-a3`, `glm5.1-a3`,
+`qwen3-32b-a3`); models without a variant just omit it.
 
 ## The spine lives in `template/`
 
@@ -19,9 +22,22 @@ copy), so they MUST stay byte-identical to `template/`:
   `/dev/davinci*` count. Run on every node and diff the output before launching.
 
 When you change the spine, edit `template/` first, then re-copy into each layout.
-To check for drift: `md5 template/setup_rank_env.sh */*/*/*/setup_rank_env.sh`.
+To check for drift: `md5 template/setup_rank_env.sh models/*/*/setup_rank_env.sh`.
 
 ## Layout naming convention
+
+Non-PD layouts: `1node` (standalone), `2nodes` (mixed engine). PD layouts encode
+topology as **`<A>x<B>p<C>x<D>d`** — A/C = number of prefill/decode *instances*
+(independent engines, each its own KV endpoint), B/D = *nodes each instance
+spans* (when weights don't fit one node and EP/TP shard across nodes). Omit `x1`
+for single-node instances. So `1p1d` = 1 single-node P + 1 single-node D;
+`2p1x2d` = 2 single-node P + 1 D spanning 2 nodes; `1x2p2d` = 1 P spanning 2
+nodes + 2 single-node D. A `_2` suffix is a second config of the same topology.
+This distinction is load-bearing: `2p2d` (2 standalone instances, 2 proxy
+endpoints per role) and `1x2p1x2d` (1 instance spanning 2 nodes, 1 endpoint) have
+the same node count but completely different proxy wiring.
+
+What files are present then follows from the layout:
 
 | Files present | Means |
 |---------------|-------|
@@ -54,11 +70,18 @@ node/group counts, then `exec`s the per-role launcher for `AISHIPBOX_NODE_RANK`.
 
 ## Bringing up a NEW model or platform
 
-Only `deepseekv4/flash/a3` is **verified on real hardware** (see README status
-matrix). Everything else is derived-but-untested — treat it as a starting point,
-not a known-good config. To add a new deployment:
+Only `models/deepseekv4-flash-a3` is **verified on real hardware** (see README
+status matrix). Everything else is derived-but-untested — treat it as a starting
+point, not a known-good config.
 
-1. **Pick the closest verified layout** as the base (e.g. `deepseekv4/flash/a3/2nodes`).
+The reference configs come from the **official vLLM-Ascend per-model tutorials**
+(`https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/<Model>.html`,
+e.g. `DeepSeek-V4-Flash.html`). When adding a deployment by extracting the
+upstream config and adapting it to this repo's spine/conventions, use the
+**`new-deployment` skill** — it has the full extract-and-adapt procedure. The
+steps below are the condensed version:
+
+1. **Pick the closest verified layout** as the base (e.g. `models/deepseekv4-flash-a3/2nodes`).
 2. **Copy the spine verbatim** from `template/`:
    `cp template/setup_rank_env.sh template/check_hccn.sh <new_layout>/`.
 3. **Start from `run.sh.tmpl` / `run_node.sh.tmpl`** if no close base exists; keep
@@ -75,6 +98,41 @@ not a known-good config. To add a new deployment:
 7. **Validate before claiming it works:** run `check_hccn.sh` on every node and
    diff; bring the engine up; confirm the API responds. Then mark it verified in
    the README status matrix — until then it stays `⚠ untested`.
+
+## Deployment provenance & releases
+
+The upstream tutorials change over time (new flags, new vLLM-Ascend). We don't
+auto-detect that drift; instead every deployment records **what it was derived
+from and validated against**, so a stale config is obvious in review and we can
+re-derive deliberately.
+
+**`meta.yaml` per layout** — every `models/<...>/<layout>/` carries one:
+
+```yaml
+source: https://docs.vllm.ai/projects/ascend/.../<Model>.html
+derived: 2026-06-26        # date this config was extracted / last re-derived
+vllm: 0.x.y                # vLLM version the config targets
+vllm_ascend: <image tag>   # vLLM-Ascend image validated against
+verified: true             # true ONLY after end-to-end check on real hardware
+notes: ''
+```
+
+It's a real file in the layout dir (ModelArts copies it flat like everything
+else; it's inert to the engine). When you add or re-derive a deployment, fill
+`derived` / `vllm` / `vllm_ascend`; flip `verified` only after a hardware run.
+Keep `verified` here in sync with the README status matrix.
+
+**Snapshots = git tag + GitHub release.** At known-good points (a new validated
+deployment, or a re-derive after upstream changed), tag and cut a release:
+
+```bash
+git tag deploy-YYYY-MM-DD
+gh release create deploy-YYYY-MM-DD --notes "what changed vs last snapshot, why
+(e.g. re-derived dsv4 1p1d for vllm-ascend <tag>; upstream added <flag>)"
+```
+
+The release notes are the human record of *why* a config moved — that's where
+"upstream changed" gets documented. Tags are the checkout-able frozen set.
 
 ## Gotchas (learned on hardware)
 
