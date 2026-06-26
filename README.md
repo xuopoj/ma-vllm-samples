@@ -340,6 +340,7 @@ B/D 是**每个实例横跨的节点数**;`x1`(单节点实例)省略不写。
 | `models/deepseekv4-flash-a2/2nodes` | ⚠ untested |
 | `models/deepseekv4-flash-a2/1x2p2d` | ⚠ untested |
 | `models/deepseekv4-flash-a2/2p2d` | ⚠ untested |
+| `models/deepseekv4-flash-a2/2p1x2d` | ⚠ untested |
 | `models/deepseekv4-pro-a3/2nodes` | ⚠ untested |
 | `models/glm5-a3/2nodes` | ⚠ untested |
 | `models/glm5.1-a3/1node` | ⚠ untested |
