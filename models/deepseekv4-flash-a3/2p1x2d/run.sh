@@ -1,5 +1,6 @@
 #!/bin/sh
-# Entry point for DeepSeek-V4 P-D disaggregation (2P1D logical, 4 physical nodes).
+# Entry point for DeepSeek-V4 P-D disaggregation (2p1x2d: 2 single-node prefill +
+# 1 decode engine spanning 2 nodes, 4 physical nodes total).
 # Sources setup_rank_env.sh and dispatches to the per-role launcher based on rank.
 #
 # Topology (assumed rank-table order):

@@ -1,12 +1,17 @@
 #!/bin/sh
-# Node 0 (leader): dp-ranks 0..7 of the DP=16 mixed engine, plus the API
-# server on :8080. Node 1 joins headless with dp-ranks 8..15. EP spans all
-# 16 NPUs, so each NPU holds half the experts vs a standalone DP=8 engine.
+# Node 1 (headless worker): dp-ranks 8..15 of the DP=16 mixed engine led by
+# node 0. --headless means no API server here; this node only rendezvouses
+# with the leader (rank 0's IP, rpc port 12321) and serves its 8 local DP
+# workers. Engine flags must mirror run_node0.sh exactly (same engine); only
+# the --headless / --data-parallel-start-rank / --data-parallel-address
+# lines differ.
 
 set -e
 : "${AISHIPBOX_CURRENT_ADDR:?run via run.sh}"
+: "${AISHIPBOX_ADDR_0:?run via run.sh}"
 
 local_ip="$AISHIPBOX_CURRENT_ADDR"
+leader_ip="$AISHIPBOX_ADDR_0"
 
 nic_name=$(ifconfig 2>/dev/null | awk -v ip="$local_ip" '
     /^[^[:space:]]/ { iface=$1; sub(":","",iface) }
@@ -17,7 +22,7 @@ if [ -z "$nic_name" ]; then
     ifconfig >&2 || true
     exit 1
 fi
-echo "[run] role=LEADER nic=$nic_name local=$local_ip"
+echo "[run] role=HEADLESS nic=$nic_name local=$local_ip leader=$leader_ip"
 
 export HCCL_OP_EXPANSION_MODE="AIV"
 export HCCL_IF_IP="$local_ip"
@@ -28,7 +33,7 @@ export VLLM_RPC_TIMEOUT=3600000
 export VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=30000
 export VLLM_ENGINE_READY_TIMEOUT_S=1800
 # Cross-node DP rendezvous + EP all-to-all need generous timeouts (same
-# values as the cross-node prefill engine in pd-1p2d).
+# values as the cross-node prefill engine in 1x2p2d).
 export HCCL_EXEC_TIMEOUT=2000
 export HCCL_CONNECT_TIMEOUT=1200
 export OMP_PROC_BIND=false
@@ -41,15 +46,14 @@ export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libjemalloc.so.2:${LD_PRELOAD:-}
 export USE_MULTI_BLOCK_POOL=1
 export VLLM_ASCEND_ENABLE_FUSED_MC2=1
 
-# max-model-len 131072: EP=16 halves per-NPU expert weights vs the DP=8 PD
-# engines (which fit 65536 at 0.90), so 2x the context should fit; raise
-# further only after watching the KV-cache log line at startup.
 exec vllm serve /root/model \
     --host 0.0.0.0 \
     --port 8080 \
+    --headless \
     --data-parallel-size 16 \
     --data-parallel-size-local 8 \
-    --data-parallel-address "$local_ip" \
+    --data-parallel-start-rank 8 \
+    --data-parallel-address "$leader_ip" \
     --data-parallel-rpc-port 12321 \
     --tensor-parallel-size 1 \
     --enable-expert-parallel \

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Request-forwarding proxy for DeepSeek-V4 P-D disaggregation (2P1D, 4 nodes).
+# Request-forwarding proxy for DeepSeek-V4 P-D disaggregation (2p1x2d, 4 nodes).
 #
 # Fronts the four engines launched by run.sh and load-balances OpenAI-API requests:
 # a request is sent to a prefiller first (produces the KV cache), then handed to the

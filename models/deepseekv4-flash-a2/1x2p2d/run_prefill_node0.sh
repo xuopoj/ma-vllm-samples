@@ -49,7 +49,7 @@ export LD_LIBRARY_PATH=/usr/local/lib:${LD_LIBRARY_PATH:-}
 
 # Memory tuning: gpu-memory-utilization 0.90 is the safe ceiling on A2 (0.94
 # passed init but OOM'd at runtime). EP=16 halves per-NPU expert weights vs
-# pd-2p2d, so KV cache should fit more comfortably here; if it still
+# 2p2d, so KV cache should fit more comfortably here; if it still
 # doesn't, lower --max-num-batched-tokens (8192 -> 4096) before touching
 # utilization -- it drives the activation peak.
 exec vllm serve /root/model \

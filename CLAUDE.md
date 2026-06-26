@@ -2,9 +2,12 @@
 
 This repo holds ModelArts launch scripts for serving large MoE models
 (DeepSeek-V4, GLM-5, Qwen3) on Huawei Atlas 800 A2 (8 NPU/node) and A3 (16
-NPU/node) hardware via vLLM-Ascend. Each `<model>/<variant>/<platform>/<layout>`
-directory is a self-contained deployment that ModelArts copies flat to
-`/root/script` and runs with `sh /root/script/run.sh` on every node.
+NPU/node) hardware via vLLM-Ascend. Each
+`models/<model-variant-platform>/<layout>` directory is a self-contained
+deployment that ModelArts copies flat to `/root/script` and runs with
+`sh /root/script/run.sh` on every node. The model dir flattens model, variant,
+and platform into one segment (e.g. `deepseekv4-flash-a3`, `glm5.1-a3`,
+`qwen3-32b-a3`); models without a variant just omit it.
 
 ## The spine lives in `template/`
 
@@ -19,9 +22,22 @@ copy), so they MUST stay byte-identical to `template/`:
   `/dev/davinci*` count. Run on every node and diff the output before launching.
 
 When you change the spine, edit `template/` first, then re-copy into each layout.
-To check for drift: `md5 template/setup_rank_env.sh */*/*/*/setup_rank_env.sh`.
+To check for drift: `md5 template/setup_rank_env.sh models/*/*/setup_rank_env.sh`.
 
 ## Layout naming convention
+
+Non-PD layouts: `1node` (standalone), `2nodes` (mixed engine). PD layouts encode
+topology as **`<A>x<B>p<C>x<D>d`** — A/C = number of prefill/decode *instances*
+(independent engines, each its own KV endpoint), B/D = *nodes each instance
+spans* (when weights don't fit one node and EP/TP shard across nodes). Omit `x1`
+for single-node instances. So `1p1d` = 1 single-node P + 1 single-node D;
+`2p1x2d` = 2 single-node P + 1 D spanning 2 nodes; `1x2p2d` = 1 P spanning 2
+nodes + 2 single-node D. A `_2` suffix is a second config of the same topology.
+This distinction is load-bearing: `2p2d` (2 standalone instances, 2 proxy
+endpoints per role) and `1x2p1x2d` (1 instance spanning 2 nodes, 1 endpoint) have
+the same node count but completely different proxy wiring.
+
+What files are present then follows from the layout:
 
 | Files present | Means |
 |---------------|-------|
