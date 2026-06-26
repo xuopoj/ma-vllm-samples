@@ -99,6 +99,41 @@ steps below are the condensed version:
    diff; bring the engine up; confirm the API responds. Then mark it verified in
    the README status matrix — until then it stays `⚠ untested`.
 
+## Deployment provenance & releases
+
+The upstream tutorials change over time (new flags, new vLLM-Ascend). We don't
+auto-detect that drift; instead every deployment records **what it was derived
+from and validated against**, so a stale config is obvious in review and we can
+re-derive deliberately.
+
+**`meta.yaml` per layout** — every `models/<...>/<layout>/` carries one:
+
+```yaml
+source: https://docs.vllm.ai/projects/ascend/.../<Model>.html
+derived: 2026-06-26        # date this config was extracted / last re-derived
+vllm: 0.x.y                # vLLM version the config targets
+vllm_ascend: <image tag>   # vLLM-Ascend image validated against
+verified: true             # true ONLY after end-to-end check on real hardware
+notes: ''
+```
+
+It's a real file in the layout dir (ModelArts copies it flat like everything
+else; it's inert to the engine). When you add or re-derive a deployment, fill
+`derived` / `vllm` / `vllm_ascend`; flip `verified` only after a hardware run.
+Keep `verified` here in sync with the README status matrix.
+
+**Snapshots = git tag + GitHub release.** At known-good points (a new validated
+deployment, or a re-derive after upstream changed), tag and cut a release:
+
+```bash
+git tag deploy-YYYY-MM-DD
+gh release create deploy-YYYY-MM-DD --notes "what changed vs last snapshot, why
+(e.g. re-derived dsv4 1p1d for vllm-ascend <tag>; upstream added <flag>)"
+```
+
+The release notes are the human record of *why* a config moved — that's where
+"upstream changed" gets documented. Tags are the checkout-able frozen set.
+
 ## Gotchas (learned on hardware)
 
 - **Stale per-node weights:** warmup rank/shape op errors often mean the nodes
