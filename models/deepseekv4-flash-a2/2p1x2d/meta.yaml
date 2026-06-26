@@ -1,7 +1,7 @@
 # Provenance for this deployment. See CLAUDE.md "Deployment provenance".
 source: ./README.md   # captured from a production MA runbook (WPS .doc, 2026-06-17); see README for downloads/MA steps/curl tests
 derived: 2026-06-26      # ported from the prod runbook into this repo's spine
-vllm: v0.19.1rc1         # vLLM-Ascend image quay.io/ascend/vllm-ascend:v0.19.1rc1
+vllm: TODO               # upstream vLLM version shipped in vllm-ascend v0.19.1rc1 (runbook didn't record it)
 vllm_ascend: quay.io/ascend/vllm-ascend:v0.19.1rc1
 verified: false          # prod runbook ran on hardware, but THIS spine-adapted port is untested
 notes: >

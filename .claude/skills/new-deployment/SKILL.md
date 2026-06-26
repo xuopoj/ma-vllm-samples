@@ -33,7 +33,7 @@ e.g. `DeepSeek-V4-Flash.html`, `GLM-5.html`. Fetch it (WebFetch) and locate the
 |---------------------|------------|
 | Single-Node (A2 / A3 variant) | `1node` |
 | Multi-Node (mixed engine, leader + headless) | `2nodes` (or `Nnodes`) |
-| Multi-Node PD Separation | a PD layout — name per the `AxBp CxDd` convention in CLAUDE.md |
+| Multi-Node PD Separation | a PD layout — name per the `<A>x<B>p<C>x<D>d` convention in CLAUDE.md |
 
 Extract from the page, **verbatim**, for the target layout:
 - the full `vllm serve` command(s) and every flag
@@ -54,8 +54,8 @@ Extract from the page, **verbatim**, for the target layout:
    Copy its directory, don't start from a blank one.
 2. **Name the new dir** `models/<model-variant-platform>/<layout>/` — flatten
    model+variant+platform into one segment (`deepseekv4-flash-a3`, `glm5.1-a3`),
-   and name PD layouts with the `AxBp CxDd` convention (instances × nodes-per-
-   instance; omit `x1`). See CLAUDE.md "Layout naming convention".
+   and name PD layouts with the `<A>x<B>p<C>x<D>d` convention (instances ×
+   nodes-per-instance; omit `x1`). See CLAUDE.md "Layout naming convention".
 3. **Copy the spine verbatim** so the new layout is self-contained:
    `cp template/setup_rank_env.sh template/check_hccn.sh <new_layout>/`
    (symlinks don't survive ModelArts' flat copy). Never hand-edit these copies.
