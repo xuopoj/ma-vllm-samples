@@ -20,7 +20,7 @@
 #   sh /root/script/run_proxy.sh
 #
 # Tunables:
-#   PROXY_PORT  (default: 8000)  - port the proxy listens on
+#   PROXY_PORT  (default: 8080)  - port the proxy listens on (ModelArts service port)
 #   PROXY_HOST  (default: 0.0.0.0)
 #   PROXY_SCRIPT (default: load_balance_proxy_server_example.py on PATH / CWD)
 #     Path to vllm-ascend's examples/disaggregated_prefill_v1/load_balance_proxy_server_example.py
@@ -42,7 +42,7 @@ if [ -z "$prefiller0_ip" ] || [ -z "$prefiller1_ip" ] || [ -z "$decoder0_ip" ]; 
     exit 1
 fi
 
-PROXY_PORT="${PROXY_PORT:-8000}"
+PROXY_PORT="${PROXY_PORT:-8080}"
 PROXY_HOST="${PROXY_HOST:-0.0.0.0}"
 
 # Locate the proxy program. Prefer an explicit PROXY_SCRIPT, else look in the usual spots.
