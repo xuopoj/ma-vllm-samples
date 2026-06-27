@@ -1,9 +1,9 @@
 # Provenance for this deployment. See CLAUDE.md "Deployment provenance".
 source: ./README.md   # captured from a production MA runbook (WPS .doc, 2026-06-17); see README for downloads/MA steps/curl tests
-derived: 2026-06-26      # ported from the prod runbook into this repo's spine
-vllm: TODO               # upstream vLLM version shipped in vllm-ascend v0.19.1rc1 (runbook didn't record it)
-vllm_ascend: quay.io/ascend/vllm-ascend:v0.19.1rc1
-verified: false          # prod runbook ran on hardware, but THIS spine-adapted port is untested
+derived: 2026-06-27      # prod-runbook port (2026-06-26); flags refreshed to v0.21.0rc1 on 2026-06-27
+vllm: bundled-in-image   # upstream page pins no vLLM version; use the vLLM shipped in the vllm-ascend image
+vllm_ascend: quay.io/ascend/vllm-ascend:v0.21.0rc1
+verified: false          # prod runbook ran on v0.19.1rc1 hardware; THIS spine-adapted + v0.21.0rc1-refreshed port is untested
 notes: >
   Atlas 800T A2 x4 (910B2, 8 NPU/node, 64G/card), driver 25.5.2, CANN 8.5.0.
   2 single-node prefill (DP=8) + 1 decode engine spanning 2 nodes (DP=16).
@@ -12,3 +12,7 @@ notes: >
   instead of the prod /model/deepseek-v4-flash mount. The prod runbook had a
   copy-paste bug (D1 used kv_port=30200/engine_id=2, same as D0); this port maps
   the decode cluster as one DP=16 engine on kv_port=30200, so no clash.
+  v0.21.0rc1 refresh (2026-06-27): migrated speculative method deepseek_mtp -> mtp
+  (enforce_eager: true; decode keeps num_speculative_tokens 2) and dropped the dead
+  USE_MULTI_BLOCK_POOL env toggle. Topology, kv_ports, engine_ids, A2 memory tuning,
+  and --chat-template unchanged from the prod-runbook port.

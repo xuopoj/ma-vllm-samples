@@ -1,7 +1,7 @@
 # Provenance for this deployment. See CLAUDE.md "Deployment provenance".
 source: https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/DeepSeek-V4-Flash.html
-derived: TODO            # YYYY-MM-DD this config was extracted/last re-derived
-vllm: TODO               # vLLM version the config targets
-vllm_ascend: TODO        # vLLM-Ascend image tag validated against
-verified: true          # 真机端到端已验证；derived/vllm/vllm_ascend 版本号待回填
-notes: ''                # anything platform/layout-specific worth recording
+derived: 2026-06-27      # re-derived against the v0.21.0rc1 upstream tutorial
+vllm: bundled-in-image   # upstream page pins no vLLM version; use the vLLM shipped in the vllm-ascend image
+vllm_ascend: quay.io/ascend/vllm-ascend:v0.21.0rc1-a3
+verified: false          # config matches v0.21.0rc1 upstream + repo conventions, but NOT yet re-validated on hardware at this version
+notes: 'A3 1P1D PD separation with external online DP. Already aligned with the v0.21.0rc1 reference (mtp/enforce_eager). kv_port deviates to 36000/36100 (upstream 30000/30100): the official kv_port table reserves [20000,36000) for AscendDirectTransport on 16-NPU nodes. Was hardware-verified at an earlier image; flipped to false until re-run on v0.21.0rc1.'

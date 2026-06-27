@@ -36,7 +36,6 @@ export HCCL_BUFFSIZE=2560
 export TASK_QUEUE_ENABLE=1
 export ASCEND_BUFFER_POOL=4:8
 export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libjemalloc.so.2:${LD_PRELOAD:-}
-export USE_MULTI_BLOCK_POOL=1
 
 # Mooncake installs ascend_transport.so to /usr/local/lib, which is not in
 # the ldconfig cache; ModelArts launches via sh (no login-shell env), so
@@ -67,7 +66,7 @@ exec vllm serve /root/model \
     --gpu-memory-utilization 0.90 \
     --quantization ascend \
     --chat-template /root/model/chat_template.jinja \
-    --speculative-config '{"num_speculative_tokens": 1, "method":"deepseek_mtp"}' \
+    --speculative-config '{"num_speculative_tokens": 1, "method": "mtp", "enforce_eager": true}' \
     --enforce-eager \
     --additional-config '{"enable_cpu_binding": "true"}' \
     --kv-transfer-config '{"kv_connector": "MooncakeHybridConnector", "kv_role": "kv_producer", "kv_port": "30100", "engine_id": "1", "kv_connector_extra_config": {"prefill": {"dp_size": 8, "tp_size": 1}, "decode": {"dp_size": 16, "tp_size": 1}}}'

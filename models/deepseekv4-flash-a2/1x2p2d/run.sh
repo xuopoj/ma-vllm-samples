@@ -27,8 +27,6 @@ set -e
 here=$(cd "$(dirname "$0")" && pwd)
 . "$here/setup_rank_env.sh"
 
-export USE_MULTI_GROUPS_KV_CACHE=1
-
 # Print the rank -> role | pod | ip topology so each node logs the full picture.
 # 拓扑信息同时打到 stdout 和 env.log（$ENV_LOG 由 setup_rank_env.sh 导出），
 # 否则很快会被 vLLM 日志冲掉。
