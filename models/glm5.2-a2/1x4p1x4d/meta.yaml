@@ -1,0 +1,19 @@
+# Provenance for this deployment. See CLAUDE.md "Deployment provenance".
+source: https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/GLM5.2.html
+derived: 2026-06-27      # extracted from the GLM-5.2 upstream tutorial (PD Separation A2, 8-node)
+vllm: 0.21.0             # upstream sets VLLM_VERSION=0.21.0
+vllm_ascend: quay.io/ascend/vllm-ascend:glm5.2
+verified: false          # derived from upstream, NOT validated on hardware
+notes: >
+  GLM-5.2-w8a8, A2 PD disaggregation on 8 nodes (8 NPU/node), external online DP.
+  1 prefill engine spanning 4 nodes (DP=4, TP=8, dp-local=1 -> 1 instance/node,
+  port 9081, kv_producer kv_port=30000 engine_id=0) + 1 decode engine spanning
+  4 nodes (DP=8, TP=4, dp-local=2 -> 2 instances/node, ports 9900..9901,
+  kv_consumer kv_port=30100 engine_id=1). Connector MooncakeConnector with
+  use_ascend_direct + kv_connector_module_path. Proxy fans across 4 prefill +
+  8 decode = 12 endpoints. ranks0-3=prefill (rank0 master), ranks4-7=decode
+  (rank4 master); proxy runs on group-0 nodes. Decode workers compute
+  dp-rank-start as (node_rank-4)*2. served-model-name glm-52,
+  tool-call-parser glm47, reasoning-parser glm45, speculative deepseek_mtp
+  (GLM-5.2 own MTP). Deviations: /root/model (repo convention); upstream uses no
+  single-node A2 and this is the only A2 PD variant. kv_ports/engine_ids kept.

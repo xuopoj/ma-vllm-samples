@@ -25,6 +25,12 @@
 | `models/deepseekv4-flash-a2/2p2d`   | `v0.21.0rc1`    | ⚠ untested |
 | `models/deepseekv4-flash-a2/2p1x2d` | `v0.21.0rc1`    | ⚠ untested |
 | `models/deepseekv4-pro-a3/2nodes`   | `v0.21.0rc1-a3` | ⚠ untested |
+| `models/glm5.2-a3/1node`            | `glm5.2-a3`     | ⚠ untested |
+| `models/glm5.2-a3/2nodes`           | `glm5.2-a3`     | ⚠ untested |
+| `models/glm5.2-a3/4nodes`           | `glm5.2-a3`     | ⚠ untested |
+| `models/glm5.2-a3/1x2p1x2d`         | `glm5.2-a3`     | ⚠ untested |
+| `models/glm5.2-a2/2nodes`           | `glm5.2`        | ⚠ untested |
+| `models/glm5.2-a2/1x4p1x4d`         | `glm5.2`        | ⚠ untested |
 
 ## 参考基线
 

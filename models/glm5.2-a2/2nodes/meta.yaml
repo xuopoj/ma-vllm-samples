@@ -1,0 +1,7 @@
+# Provenance for this deployment. See CLAUDE.md "Deployment provenance".
+source: https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/GLM5.2.html
+derived: 2026-06-27      # extracted from the GLM-5.2 upstream tutorial (Multi-Node A2)
+vllm: 0.21.0             # upstream sets VLLM_VERSION=0.21.0
+vllm_ascend: quay.io/ascend/vllm-ascend:glm5.2
+verified: false          # derived from upstream, NOT validated on hardware
+notes: 'GLM-5.2-w8a8, 2x A2 (8 NPU/node) single mixed engine, DP=2 x TP=8 (dp-local=1, one DP rank per node). rank0=leader (API :8080), rank1=headless. No single-node A2 exists upstream (model needs >=2 A2 nodes). served-model-name glm-52, speculative deepseek_mtp (GLM-5.2 own MTP). Deviations: /root/model and --port 8080 (upstream cache path + 7000); upstream --max_model_len normalized to --max-model-len.'
