@@ -25,13 +25,6 @@
 | `models/deepseekv4-flash-a2/2p2d`   | `v0.21.0rc1`    | ⚠ untested |
 | `models/deepseekv4-flash-a2/2p1x2d` | `v0.21.0rc1`    | ⚠ untested |
 | `models/deepseekv4-pro-a3/2nodes`   | `v0.21.0rc1-a3` | ⚠ untested |
-| `models/glm5-a3/2nodes`             | —               | ⚠ untested |
-| `models/glm5.1-a3/1node`            | —               | ⚠ untested |
-| `models/glm5.1-a3/2nodes`           | —               | ⚠ untested |
-| `models/glm5.1-a3/1x2p1x4d`         | —               | ⚠ untested |
-| `models/glm5.1-a3/1x2p1x2d`         | —               | ⚠ untested |
-| `models/glm5.1-a3/1x2p1x2d_2`       | —               | ⚠ untested |
-| `models/qwen3-32b-a3/1node`         | —               | ⚠ untested |
 
 ## 参考基线
 
