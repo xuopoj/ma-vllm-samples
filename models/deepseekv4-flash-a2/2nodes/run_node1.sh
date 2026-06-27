@@ -43,8 +43,6 @@ export HCCL_BUFFSIZE=1024
 export TASK_QUEUE_ENABLE=1
 export ASCEND_BUFFER_POOL=4:8
 export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libjemalloc.so.2:${LD_PRELOAD:-}
-export USE_MULTI_BLOCK_POOL=1
-export VLLM_ASCEND_ENABLE_FUSED_MC2=1
 
 exec vllm serve /root/model \
     --host 0.0.0.0 \
@@ -67,7 +65,7 @@ exec vllm serve /root/model \
     --gpu-memory-utilization 0.90 \
     --quantization ascend \
     --chat-template /root/model/chat_template.jinja \
-    --speculative-config '{"num_speculative_tokens": 1, "method":"deepseek_mtp"}' \
+    --speculative-config '{"num_speculative_tokens": 1, "method": "mtp", "enforce_eager": true}' \
     --async-scheduling \
     --compilation-config '{"cudagraph_mode": "FULL_DECODE_ONLY"}' \
     --additional-config '{"enable_cpu_binding": "true", "multistream_overlap_shared_expert": false, "multistream_dsa_preprocess": false}'

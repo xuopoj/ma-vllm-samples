@@ -1,7 +1,7 @@
 # Provenance for this deployment. See CLAUDE.md "Deployment provenance".
 source: https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/DeepSeek-V4-Flash.html
-derived: TODO            # YYYY-MM-DD this config was extracted/last re-derived
-vllm: TODO               # vLLM version the config targets
-vllm_ascend: TODO        # vLLM-Ascend image tag validated against
-verified: false          # true only after end-to-end check on real hardware
-notes: ''                # anything platform/layout-specific worth recording
+derived: 2026-06-27      # re-derived against the v0.21.0rc1 upstream tutorial
+vllm: bundled-in-image   # upstream page pins no vLLM version; use the vLLM shipped in the vllm-ascend image
+vllm_ascend: quay.io/ascend/vllm-ascend:v0.21.0rc1
+verified: false          # refreshed to v0.21.0rc1, NOT validated on hardware
+notes: '2x A2 (8 NPU/node) single mixed engine, DP=16 x TP=1 x EP=16 across both nodes. v0.21.0rc1 refresh: migrated speculative method deepseek_mtp -> mtp (enforce_eager: true) and dropped dead env toggles (USE_MULTI_BLOCK_POOL, VLLM_ASCEND_ENABLE_FUSED_MC2, USE_MULTI_GROUPS_KV_CACHE). A2 memory tuning (max-model-len 131072, gpu-mem 0.90) and --chat-template preserved.'

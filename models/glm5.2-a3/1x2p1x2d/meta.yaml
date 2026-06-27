@@ -1,0 +1,23 @@
+# Provenance for this deployment. See CLAUDE.md "Deployment provenance".
+source: https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/GLM5.2.html
+derived: 2026-06-27      # extracted from the GLM-5.2 upstream tutorial (PD Separation A3)
+vllm: 0.21.0             # upstream sets VLLM_VERSION=0.21.0
+vllm_ascend: quay.io/ascend/vllm-ascend:glm5.2-a3
+verified: false          # derived from upstream, NOT validated on hardware
+notes: >
+  GLM-5.2-w8a8, A3 PD disaggregation on 4 nodes, external online DP.
+  1 prefill engine spanning 2 nodes (DP=2, TP=16, dp-local=1 -> 1 instance/node,
+  ports 9081, kv_producer kv_port=30000 engine_id=0) + 1 decode engine spanning
+  2 nodes (DP=8, TP=4, dp-local=4 -> 4 instances/node, ports 9900..9903,
+  kv_consumer kv_port=30100 engine_id=1). MooncakeConnectorV1 with
+  use_ascend_direct. Proxy fans across 2 prefill + 8 decode = 10 endpoints.
+  rank0/1=prefill master/worker, rank2/3=decode master/worker; proxy runs on
+  group-0 nodes. served-model-name glm-52, tool-call-parser glm47,
+  reasoning-parser glm45, speculative deepseek_mtp (GLM-5.2 own MTP).
+  Deviations: /root/model (repo convention); kv_ports/engine_ids kept from upstream.
+  NOTE: kv-transfer-config uses MooncakeConnectorV1 with NO kv_connector_module_path,
+  verbatim from the upstream GLM-5.2 A3 PD page (the glm5.2-a3 image is expected to
+  register V1 without an explicit path). The repo's deepseekv4 a3 PD layouts DO set
+  kv_connector_module_path=vllm_ascend.distributed.mooncake_connector for V1, so if
+  the engines fail at init with "cannot resolve connector MooncakeConnectorV1",
+  add that module path here -- first thing to check on hardware bring-up.

@@ -40,8 +40,6 @@ export OMP_NUM_THREADS=10
 export PYTORCH_NPU_ALLOC_CONF=expandable_segments:True
 export HCCL_BUFFSIZE=1024
 export ASCEND_BUFFER_POOL=4:8
-export USE_MULTI_BLOCK_POOL=1
-export VLLM_ASCEND_ENABLE_FUSED_MC2=1
 
 # Mooncake installs ascend_transport.so to /usr/local/lib, which is not in
 # the ldconfig cache; ModelArts launches via sh (no login-shell env), so
@@ -69,7 +67,7 @@ exec vllm serve /root/model \
     --gpu-memory-utilization 0.88 \
     --quantization ascend \
     --chat-template /root/model/chat_template.jinja \
-    --speculative-config '{"num_speculative_tokens": 2, "method":"deepseek_mtp"}' \
+    --speculative-config '{"num_speculative_tokens": 2, "method": "mtp", "enforce_eager": true}' \
     --compilation-config '{"cudagraph_mode": "FULL_DECODE_ONLY","cudagraph_capture_sizes":[144]}' \
     --additional-config '{"enable_cpu_binding": "true", "multistream_overlap_shared_expert": false, "multistream_dsa_preprocess": false}' \
     --kv-transfer-config '{"kv_connector": "MooncakeHybridConnector", "kv_role": "kv_consumer", "kv_port": "30200", "engine_id": "2", "kv_connector_extra_config": {"prefill": {"dp_size": 16, "tp_size": 1}, "decode": {"dp_size": 8, "tp_size": 1}}}'

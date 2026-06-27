@@ -1,0 +1,7 @@
+# Provenance for this deployment. See CLAUDE.md "Deployment provenance".
+source: https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/GLM5.2.html
+derived: 2026-06-27      # extracted from the GLM-5.2 upstream tutorial (Single-Node A3)
+vllm: 0.21.0             # upstream sets VLLM_VERSION=0.21.0
+vllm_ascend: quay.io/ascend/vllm-ascend:glm5.2-a3
+verified: false          # derived from upstream, NOT validated on hardware
+notes: 'GLM-5.2-w8a8, single A3 node, DP=2 x TP=8. served-model-name glm-52 (upstream). Speculative method deepseek_mtp is GLM-5.2 own MTP per upstream. Deviations: /root/model and --port 8080 (repo conventions; upstream cache path + 8077).'

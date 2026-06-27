@@ -1,7 +1,7 @@
 # Provenance for this deployment. See CLAUDE.md "Deployment provenance".
 source: https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/DeepSeek-V4-Pro.html
-derived: TODO            # YYYY-MM-DD this config was extracted/last re-derived
-vllm: TODO               # vLLM version the config targets
-vllm_ascend: TODO        # vLLM-Ascend image tag validated against
-verified: false          # true only after end-to-end check on real hardware
-notes: ''                # anything platform/layout-specific worth recording
+derived: 2026-06-27      # re-derived against the v0.21.0rc1 upstream tutorial
+vllm: bundled-in-image   # upstream page pins no vLLM version; use the vLLM shipped in the vllm-ascend image
+vllm_ascend: quay.io/ascend/vllm-ascend:v0.21.0rc1-a3
+verified: false          # config matches v0.21.0rc1 upstream + repo conventions, but NOT validated on hardware
+notes: 'DeepSeek-V4-Pro-w4a8-mtp, 2x A3, TP=16 x DP=2. Already aligned with the v0.21.0rc1 Pro 2-node reference (mtp/enforce_eager). Deliberate deviation from upstream: uses --data-parallel-rank (not --data-parallel-start-rank, which causes a front-end handshake timeout per repo gotcha).'

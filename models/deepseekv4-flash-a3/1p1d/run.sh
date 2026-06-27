@@ -24,8 +24,6 @@ set -e
 here=$(cd "$(dirname "$0")" && pwd)
 . "$here/setup_rank_env.sh"
 
-export USE_MULTI_GROUPS_KV_CACHE=1
-
 if [ "$AISHIPBOX_NNODES" != 2 ]; then
     echo "[run] expected 2 nodes, rank table has $AISHIPBOX_NNODES" >&2
     exit 1

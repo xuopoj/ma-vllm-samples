@@ -1,7 +1,0 @@
-# Provenance for this deployment. See CLAUDE.md "Deployment provenance".
-source: TODO            # upstream Qwen3-32B tutorial URL unknown (guessed Qwen3-32B.html 404s); find correct page
-derived: TODO            # YYYY-MM-DD this config was extracted/last re-derived
-vllm: TODO               # vLLM version the config targets
-vllm_ascend: TODO        # vLLM-Ascend image tag validated against
-verified: false          # true only after end-to-end check on real hardware
-notes: ''                # anything platform/layout-specific worth recording

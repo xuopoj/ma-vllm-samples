@@ -1,0 +1,7 @@
+# Provenance for this deployment. See CLAUDE.md "Deployment provenance".
+source: https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/GLM5.2.html
+derived: 2026-06-27      # extracted from the GLM-5.2 upstream tutorial (Co-located 4 Nodes, 200k)
+vllm: 0.21.0             # upstream sets VLLM_VERSION=0.21.0
+vllm_ascend: quay.io/ascend/vllm-ascend:glm5.2-a3
+verified: false          # derived from upstream, NOT validated on hardware
+notes: 'GLM-5.2-w8a8, 4x A3 co-located mixed engine for 200k context, DP=4 x TP=8 (dp-local=1, one DP rank per node). rank0=leader (API :8080), ranks1-3=headless via a single run_node_headless.sh (dp-start-rank == node rank). served-model-name glm-52, speculative deepseek_mtp. Deviations: /root/model and --port 8080 (upstream cache path + 7000); upstream --max_model_len normalized to --max-model-len. NOTE: dp-local 1 x tp 8 = 8 uses only 8 of the 16 NPUs/node -- this is verbatim from the upstream 200k co-located config (it trades NPU count for context length), not a TP transcription slip; do not "fix" to TP=16.'

@@ -38,11 +38,6 @@ export HCCL_BUFFSIZE=1024
 export OMP_PROC_BIND=false
 export OMP_NUM_THREADS=10
 export VLLM_ASCEND_ENABLE_FLASHCOMM1=1
-export ACL_OP_INIT_MODE=1
-export ASCEND_A3_ENABLE=1
-export USE_MULTI_BLOCK_POOL=1
-export VLLM_ASCEND_ENABLE_FUSED_MC2=1
-export USE_MULTI_GROUPS_KV_CACHE=1
 
 exec vllm serve /root/model \
     --host 0.0.0.0 \
@@ -67,7 +62,7 @@ exec vllm serve /root/model \
     --reasoning-parser deepseek_v4 \
     --safetensors-load-strategy prefetch \
     --quantization ascend \
-    --speculative-config '{"num_speculative_tokens": 1, "method": "deepseek_mtp"}' \
+    --speculative-config '{"num_speculative_tokens": 1, "method": "mtp", "enforce_eager": true}' \
     --block-size 128 \
     --compilation-config '{"cudagraph_mode": "FULL_DECODE_ONLY"}' \
     --async-scheduling \
