@@ -77,14 +77,20 @@ if [ ! -f "$PROXY_SCRIPT" ]; then
     exit 1
 fi
 
-: "${AISHIPBOX_ADDR_0:?rank 0 (prefill) address missing -- run via run.sh}"
-: "${AISHIPBOX_ADDR_1:?rank 1 (prefill) address missing -- run via run.sh}"
-: "${AISHIPBOX_ADDR_2:?rank 2 (prefill) address missing -- run via run.sh}"
-: "${AISHIPBOX_ADDR_3:?rank 3 (prefill) address missing -- run via run.sh}"
-: "${AISHIPBOX_ADDR_4:?rank 4 (decode) address missing -- run via run.sh}"
-: "${AISHIPBOX_ADDR_5:?rank 5 (decode) address missing -- run via run.sh}"
-: "${AISHIPBOX_ADDR_6:?rank 6 (decode) address missing -- run via run.sh}"
-: "${AISHIPBOX_ADDR_7:?rank 7 (decode) address missing -- run via run.sh}"
+# This is an 8-node layout, but setup_rank_env.sh only exports per-rank
+# AISHIPBOX_ADDR_<N> for N in 0..4 (range(min(5, len(servers)))). Ranks 5-7 have
+# no ADDR_<N> var, so read the full space-separated AISHIPBOX_ADDRS list instead
+# (it carries every rank) and split it positionally: ranks 0-3 = prefill nodes,
+# ranks 4-7 = decode nodes.
+: "${AISHIPBOX_ADDRS:?run via run.sh}"
+# shellcheck disable=SC2086
+set -- $AISHIPBOX_ADDRS
+if [ "$#" -ne 8 ]; then
+    echo "[proxy] expected 8 node addresses in AISHIPBOX_ADDRS, got $# ($AISHIPBOX_ADDRS)" >&2
+    exit 1
+fi
+prefill_addrs="$1 $2 $3 $4"   # ranks 0-3
+decode_addrs="$5 $6 $7 $8"    # ranks 4-7
 
 if [ "$FORCE" -ne 1 ]; then
     if [ "$AISHIPBOX_NODE_RANK" -ge "${AISHIPBOX_GROUP0_SIZE:-1}" ]; then
@@ -102,7 +108,8 @@ N_DECODE_PER_NODE=2
 prefill_hosts=""; prefill_ports=""
 decode_hosts="";  decode_ports=""
 
-for addr in "$AISHIPBOX_ADDR_0" "$AISHIPBOX_ADDR_1" "$AISHIPBOX_ADDR_2" "$AISHIPBOX_ADDR_3"; do
+# shellcheck disable=SC2086
+for addr in $prefill_addrs; do
     i=0
     while [ "$i" -lt "$N_PREFILL_PER_NODE" ]; do
         prefill_hosts="$prefill_hosts $addr"
@@ -110,7 +117,8 @@ for addr in "$AISHIPBOX_ADDR_0" "$AISHIPBOX_ADDR_1" "$AISHIPBOX_ADDR_2" "$AISHIP
         i=$((i + 1))
     done
 done
-for addr in "$AISHIPBOX_ADDR_4" "$AISHIPBOX_ADDR_5" "$AISHIPBOX_ADDR_6" "$AISHIPBOX_ADDR_7"; do
+# shellcheck disable=SC2086
+for addr in $decode_addrs; do
     i=0
     while [ "$i" -lt "$N_DECODE_PER_NODE" ]; do
         decode_hosts="$decode_hosts $addr"
@@ -121,8 +129,8 @@ done
 
 echo "[proxy] role=PROXY rank=$AISHIPBOX_NODE_RANK addr=$AISHIPBOX_CURRENT_ADDR"
 echo "[proxy] listening on $AISHIPBOX_CURRENT_ADDR:$PORT"
-echo "[proxy] prefillers: 4 instances (ADDR_0..3):$PREFILL_PORT (ranks 0-3)"
-echo "[proxy] decoders:   8 instances (ADDR_4..7):$DECODE_PORT..$((DECODE_PORT + N_DECODE_PER_NODE - 1)) (ranks 4-7)"
+echo "[proxy] prefillers: 4 instances ($prefill_addrs):$PREFILL_PORT (ranks 0-3)"
+echo "[proxy] decoders:   8 instances ($decode_addrs):$DECODE_PORT..$((DECODE_PORT + N_DECODE_PER_NODE - 1)) (ranks 4-7)"
 [ -n "$extra_args" ] && echo "[proxy] extra args: $extra_args"
 
 # shellcheck disable=SC2086

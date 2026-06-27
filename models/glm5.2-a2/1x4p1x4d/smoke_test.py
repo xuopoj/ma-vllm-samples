@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Simple smoke test for the A2 2P2D PD-disaggregated DeepSeek deployment.
+"""Simple smoke test for the A2 1x4P1x4D PD-disaggregated GLM-5.2 deployment.
 
 Two modes:
 
@@ -28,9 +28,9 @@ Two modes:
            the cross pairs too).
 
 Usage:
-  python3 smoke_test.py --proxy-url   http://<proxy_ip>:8080 [--model deepseek_v4] ...
-  python3 smoke_test.py --prefill-url http://<p_ip>:7100 \\
-                        --decode-url  http://<d_ip>:7100  [--model deepseek_v4] ...
+  python3 smoke_test.py --proxy-url   http://<proxy_ip>:8080 [--model glm-52] ...
+  python3 smoke_test.py --prefill-url http://<p_ip>:9081 \\
+                        --decode-url  http://<d_ip>:9900  [--model glm-52] ...
 """
 
 import argparse
@@ -167,7 +167,7 @@ Examples:
     parser.add_argument("--proxy-url", help="Base URL of the PD proxy, e.g. http://1.2.3.4:8080 (realistic end-to-end check)")
     parser.add_argument("--prefill-url", help="Base URL of one Prefill engine, e.g. http://1.2.3.4:7100 (diagnostic, pairs with --decode-url)")
     parser.add_argument("--decode-url", help="Base URL of one Decode engine, e.g. http://1.2.3.5:7100 (diagnostic, pairs with --prefill-url)")
-    parser.add_argument("--model", default="deepseek_v4", help="Served model name (--served-model-name in run_*.sh)")
+    parser.add_argument("--model", default="glm-52", help="Served model name (--served-model-name in run_*.sh)")
     parser.add_argument("--prompt", default="The capital of France is", help="Prompt to send")
     parser.add_argument("--max-tokens", type=int, default=32, help="max_tokens for the final response")
     parser.add_argument("--timeout", type=float, default=120.0, help="Per-request HTTP timeout in seconds")

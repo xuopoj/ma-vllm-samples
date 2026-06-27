@@ -17,3 +17,7 @@ notes: >
   tool-call-parser glm47, reasoning-parser glm45, speculative deepseek_mtp
   (GLM-5.2 own MTP). Deviations: /root/model (repo convention); upstream uses no
   single-node A2 and this is the only A2 PD variant. kv_ports/engine_ids kept.
+  NOTE: prefill max-model-len 115168 vs decode 135168 is asymmetric -- this is
+  verbatim from the upstream A2 PD page (not a typo); leave as-is unless upstream
+  changes. The proxy reads node IPs from AISHIPBOX_ADDRS (full positional list),
+  not per-rank AISHIPBOX_ADDR_<N>, because the spine only exports ADDR_0..ADDR_4.

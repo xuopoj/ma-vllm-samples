@@ -15,3 +15,9 @@ notes: >
   group-0 nodes. served-model-name glm-52, tool-call-parser glm47,
   reasoning-parser glm45, speculative deepseek_mtp (GLM-5.2 own MTP).
   Deviations: /root/model (repo convention); kv_ports/engine_ids kept from upstream.
+  NOTE: kv-transfer-config uses MooncakeConnectorV1 with NO kv_connector_module_path,
+  verbatim from the upstream GLM-5.2 A3 PD page (the glm5.2-a3 image is expected to
+  register V1 without an explicit path). The repo's deepseekv4 a3 PD layouts DO set
+  kv_connector_module_path=vllm_ascend.distributed.mooncake_connector for V1, so if
+  the engines fail at init with "cannot resolve connector MooncakeConnectorV1",
+  add that module path here -- first thing to check on hardware bring-up.
