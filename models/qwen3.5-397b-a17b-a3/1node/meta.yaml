@@ -1,0 +1,7 @@
+# Provenance for this deployment. See CLAUDE.md "Deployment provenance".
+source: https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/Qwen3.5-397B-A17B.html
+derived: 2026-06-28      # extracted from the Qwen3.5-397B-A17B upstream tutorial (5.1 Single-Node A3)
+vllm: bundled-in-image   # upstream page pins no vLLM version; use the vLLM shipped in the vllm-ascend image
+vllm_ascend: TODO        # upstream gives no image tag; set to the qwen3.5-capable vllm-ascend tag before deploy
+verified: false          # derived from upstream, NOT validated on hardware
+notes: 'Qwen3.5-397B-A17B-w8a8-mtp, single A3 node (16 NPU), DP=1 x TP=16. served-model-name qwen3.5 (upstream). Speculative method qwen3_5_mtp is Qwen3.5 own MTP per upstream. Deviations from upstream 5.1: /root/model (not modelscope cache Eco-Tech/Qwen3.5-397B-A17B-w8a8-mtp), --port 8080 (upstream 8000), dropped VLLM_USE_MODELSCOPE (model pre-mounted). All other env (HCCL_*, jemalloc LD_PRELOAD, cpufreq/sysctl tuning) and serve flags kept verbatim.'
