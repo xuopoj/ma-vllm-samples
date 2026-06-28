@@ -37,7 +37,13 @@ here=$(cd "$(dirname "$0")" && pwd)
 : "${AISHIPBOX_ADDRS:?run via run.sh / setup_rank_env.sh first}"
 
 # AISHIPBOX_ADDRS is a space-separated list in rank order: p0 d0 d1.
+# Guard the 3-node topology before the positional split, so a misgrouped rank
+# table fails fast here instead of routing to a wrong/absent endpoint later.
 set -- $AISHIPBOX_ADDRS
+if [ "$#" -ne 3 ]; then
+    echo "[proxy] expected 3 node addresses in AISHIPBOX_ADDRS (p0 d0 d1), got $# ($AISHIPBOX_ADDRS)" >&2
+    exit 1
+fi
 prefiller0_ip=$1
 decoder0_ip=$2   # decode DP=16 master (rank 1); the only decode API endpoint
 if [ -z "$prefiller0_ip" ] || [ -z "$decoder0_ip" ]; then

@@ -23,6 +23,11 @@ set -e
 here=$(cd "$(dirname "$0")" && pwd)
 . "$here/setup_rank_env.sh"
 
+if [ "$AISHIPBOX_NNODES" != 3 ]; then
+    echo "[run] expected 3 nodes (1 prefill + 2 decode), rank table has $AISHIPBOX_NNODES" >&2
+    exit 1
+fi
+
 # Print the rank -> role | pod | ip topology so each node logs the full picture.
 # 拓扑信息同时打到 stdout 和 env.log（$ENV_LOG 由 setup_rank_env.sh 导出），
 # 否则很快会被 vLLM 日志冲掉。

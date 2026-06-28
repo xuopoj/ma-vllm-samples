@@ -156,17 +156,17 @@ Examples:
       --prompt "Write a haiku about snow" --max-tokens 64
 
   # Diagnose one engine pair directly (prefill0 -> decode0), bypassing the proxy:
-  python3 smoke_test.py --prefill-url http://10.0.0.1:7100 --decode-url http://10.0.0.3:7100
+  python3 smoke_test.py --prefill-url http://10.0.0.1:9081 --decode-url http://10.0.0.3:9900
 
   # Cross pair (prefill1 -> decode0) to isolate a broken link:
-  python3 smoke_test.py --prefill-url http://10.0.0.2:7100 --decode-url http://10.0.0.3:7100
+  python3 smoke_test.py --prefill-url http://10.0.0.2:9081 --decode-url http://10.0.0.3:9900
 """
     parser = argparse.ArgumentParser(
         description=__doc__, epilog=examples, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--proxy-url", help="Base URL of the PD proxy, e.g. http://1.2.3.4:8080 (realistic end-to-end check)")
-    parser.add_argument("--prefill-url", help="Base URL of one Prefill engine, e.g. http://1.2.3.4:7100 (diagnostic, pairs with --decode-url)")
-    parser.add_argument("--decode-url", help="Base URL of one Decode engine, e.g. http://1.2.3.5:7100 (diagnostic, pairs with --prefill-url)")
+    parser.add_argument("--prefill-url", help="Base URL of one Prefill engine, e.g. http://1.2.3.4:9081 (diagnostic, pairs with --decode-url)")
+    parser.add_argument("--decode-url", help="Base URL of one Decode engine, e.g. http://1.2.3.5:9900 (diagnostic, pairs with --prefill-url)")
     parser.add_argument("--model", default="glm-5", help="Served model name (--served-model-name in run_*.sh)")
     parser.add_argument("--prompt", default="The capital of France is", help="Prompt to send")
     parser.add_argument("--max-tokens", type=int, default=32, help="max_tokens for the final response")

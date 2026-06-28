@@ -1,0 +1,88 @@
+# Cuts a GitHub release whenever a deploy snapshot tag is pushed.
+#
+# The repo's release convention (see CLAUDE.md "Deployment provenance &
+# releases") is: at a known-good point, tag `deploy-YYYY-MM-DD` and cut a
+# release whose notes record what changed vs the last snapshot and why. This
+# workflow automates the "cut a release" half: push a `deploy-*` tag and it
+# creates the matching release.
+#
+#   git tag deploy-2026-06-28
+#   git push origin deploy-2026-06-28      # -> this workflow runs
+#
+# Release notes: if an annotated tag carries a message, that message is used as
+# the body. Otherwise the body is auto-generated from the commits since the
+# previous tag (GitHub's --generate-notes), plus a snapshot summary of the
+# deployment layouts and their verified status (parsed from each meta.yaml).
+name: release
+
+on:
+  push:
+    tags:
+      - 'deploy-*'
+
+permissions:
+  contents: write   # required to create the release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history for changelog)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build snapshot summary from meta.yaml
+        id: summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          out=snapshot.md
+          {
+            echo "## Deployment snapshot"
+            echo
+            echo "| Layout | vllm_ascend | verified |"
+            echo "|--------|-------------|----------|"
+            # One row per layout that carries a meta.yaml, sorted by path.
+            find models -name meta.yaml | sort | while read -r f; do
+              layout=$(dirname "$f" | sed 's#^models/##')
+              # Pull single-line scalar values; tolerate quotes/whitespace.
+              img=$(grep -E '^vllm_ascend:' "$f" | head -1 | sed -E 's/^vllm_ascend:[[:space:]]*//; s/[[:space:]]*#.*$//; s/^["'\'']//; s/["'\'']$//')
+              ver=$(grep -E '^verified:' "$f" | head -1 | sed -E 's/^verified:[[:space:]]*//; s/[[:space:]]*#.*$//')
+              [ -n "$img" ] || img='—'
+              [ -n "$ver" ] || ver='—'
+              printf '| `%s` | `%s` | %s |\n' "$layout" "$img" "$ver"
+            done
+          } > "$out"
+          echo "path=$out" >> "$GITHUB_OUTPUT"
+          echo "----- snapshot.md -----"
+          cat "$out"
+
+      - name: Build release body (annotated-tag message + snapshot)
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          # For an annotated tag, `git tag -l --format='%(contents)'` is the
+          # message body; a lightweight tag yields empty. Prepend it when present.
+          msg=$(git tag -l --format='%(contents)' "$tag")
+          if [ -n "${msg//[[:space:]]/}" ]; then
+            { echo "$msg"; echo; cat snapshot.md; } > body.md
+          else
+            cp snapshot.md body.md
+          fi
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          # --notes-file supplies our tag message (if any) + snapshot table;
+          # --generate-notes appends GitHub's auto commit changelog below it.
+          gh release create "$tag" \
+            --title "$tag" \
+            --notes-file body.md \
+            --generate-notes \
+            --verify-tag
