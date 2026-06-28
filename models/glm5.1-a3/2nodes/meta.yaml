@@ -1,0 +1,7 @@
+# Provenance for this deployment. See CLAUDE.md "Deployment provenance".
+source: https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/GLM5.html
+derived: 2026-06-28      # extracted from the GLM-5 upstream tutorial (Multi-Node A3, w8a8)
+vllm: bundled-in-image   # upstream page pins no vLLM version; use the vLLM shipped in the vllm-ascend image
+vllm_ascend: TODO        # upstream gives no image tag; set to the GLM-5.1-capable vllm-ascend tag (A3) before deploy
+verified: false          # derived from upstream, NOT validated on hardware
+notes: 'GLM-5.1-w8a8 (Eco-Tech/GLM-5.1-w8a8), 2x A3 (16 NPU/node) single mixed engine, DP=2 x TP=16 (dp-local=1, one DP rank per node). rank0=leader (API :8080), rank1=headless. The GLM5.html page covers GLM-5/GLM-5.1 with identical commands; extracted the A3 w8a8 multi-node block. served-model-name glm-5, speculative deepseek_mtp (GLM own MTP). headless node keeps --data-parallel-start-rank (no per-node API server). Deviations: /root/model (not vllm-ascend/GLM5-w8a8), --port 8080 (upstream 8077); NIC/IP resolved at runtime via the spine (upstream had placeholder nic_name/local_ip/node0_ip).'

@@ -1,0 +1,7 @@
+# Provenance for this deployment. See CLAUDE.md "Deployment provenance".
+source: https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/Qwen3.5-397B-A17B.html
+derived: 2026-06-28      # extracted from the Qwen3.5-397B-A17B upstream tutorial (5.4 PD disaggregation A3)
+vllm: bundled-in-image   # upstream page pins no vLLM version; use the vLLM shipped in the vllm-ascend image
+vllm_ascend: TODO        # upstream gives no image tag; set to the qwen3.5-capable vllm-ascend tag (A3) before deploy
+verified: false          # derived from upstream, NOT validated on hardware
+notes: 'Qwen3.5-397B-A17B-w8a8-mtp PD: 1 single-node prefill (DP=8 x TP=2, kv_producer, kv_port 23010) + 1 decode spanning 2 A3 nodes (DP=16 x TP=2, kv_consumer, kv_port 36010). MooncakeLayerwiseConnector (NOT MooncakeConnectorV1) with kv_connector_extra_config prefill{dp 8,tp 2}/decode{dp 16,tp 2}; proxy is load_balance_proxy_layerwise_server_example.py (layerwise variant, vendored from vllm-ascend main; falls back to the image copy). rank0=prefill, rank1=decode master (API), rank2=decode headless. served-model-name qwen3.5, speculative qwen3_5_mtp. Deviations from upstream 5.4: /root/model; engine API ports unified to 7100 (upstream 30060/30050) so proxy wiring derives from AISHIPBOX_ADDRS; NIC/IP resolved at runtime via the spine; added LD_LIBRARY_PATH=/usr/local/lib for Mooncake ascend_transport.so (ModelArts sh launch). kv_port values, connector type, dp/tp sizes, env block kept per upstream.'

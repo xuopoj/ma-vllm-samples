@@ -1,0 +1,7 @@
+# Provenance for this deployment. See CLAUDE.md "Deployment provenance".
+source: https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/Qwen3.5-397B-A17B.html
+derived: 2026-06-28      # extracted from the Qwen3.5-397B-A17B upstream tutorial (5.2 Multi-Node MP A2)
+vllm: bundled-in-image   # upstream page pins no vLLM version; use the vLLM shipped in the vllm-ascend image
+vllm_ascend: TODO        # upstream gives no image tag; set to the qwen3.5-capable vllm-ascend tag (A2, no -a3 suffix) before deploy
+verified: false          # derived from upstream, NOT validated on hardware
+notes: 'Qwen3.5-397B-A17B-w8a8-mtp, 2x A2 (8 NPU/node) single mixed engine, DP=2 x TP=8 (dp-local=1, one DP rank per node). rank0=leader (API :8080, --api-server-count 2), rank1=headless. served-model-name qwen3.5, speculative qwen3_5_mtp (Qwen3.5 own MTP). headless node keeps --data-parallel-start-rank (no per-node API server, so --data-parallel-rank not needed). Deviations from upstream 5.2: /root/model, --port 8080 (upstream 8000), dropped VLLM_USE_MODELSCOPE; NIC/IP resolved at runtime via the spine (upstream had placeholder nic_name/local_ip/node0_ip).'
