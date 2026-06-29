@@ -36,16 +36,18 @@ here=$(cd "$(dirname "$0")" && pwd)
     done
 } | tee -a "${ENV_LOG:-/dev/null}"
 
-# ModelArts routes service traffic only to group-0 nodes, so every group-0
-# node must host the PD proxy (on :8080, routing to the 2 prefill + 1 decode
-# endpoints from the rank table). A correct deployment puts 1 or 2 nodes in
-# group 0; more means the grouping is wrong, so fail fast.
-if [ "$AISHIPBOX_GROUP0_SIZE" -lt 1 ] || [ "$AISHIPBOX_GROUP0_SIZE" -gt 2 ]; then
-    echo "[run] group 0 has $AISHIPBOX_GROUP0_SIZE nodes (want 1 or 2) -- fix the deployment node grouping" >&2
+# Exactly ONE node must be in group 0. The proxy keeps its own least-load
+# state (active_tokens heap); ModelArts load-balances inbound traffic across
+# ALL group-0 nodes, so 2 group-0 nodes => 2 independent proxies that each
+# pick "least-loaded" without seeing the other's in-flight requests, which
+# collapses the load balancing. One group-0 node => one proxy overall.
+if [ "$AISHIPBOX_GROUP0_SIZE" -ne 1 ]; then
+    echo "[run] group 0 has $AISHIPBOX_GROUP0_SIZE nodes (want exactly 1) -- a PD deployment must route all traffic to a single proxy; fix the node grouping" >&2
     exit 1
 fi
-if [ "$AISHIPBOX_NODE_RANK" -lt "$AISHIPBOX_GROUP0_SIZE" ]; then
-    echo "[run] this node is in group 0 -> starting PD proxy alongside the engine"
+# Group 0 is the single rank-0 node (enforced above) -> start the one proxy here.
+if [ "$AISHIPBOX_NODE_RANK" -eq 0 ]; then
+    echo "[run] this is the single group-0 node -> starting the PD proxy alongside the engine"
     sh "$here/run_proxy.sh" &
 fi
 
