@@ -56,6 +56,21 @@ fi
 if [ "$AISHIPBOX_NODE_RANK" -lt "$AISHIPBOX_GROUP0_SIZE" ]; then
     echo "[run] this node is in group 0 -> starting PD proxy alongside the engines"
     sh "$here/run_proxy.sh" &
+
+    # Optional Prometheus metrics aggregator (off by default). The PD proxy
+    # exposes no /metrics, and each of the 20 engines only exposes its own on its
+    # own port -- unreachable when K8s routes externally only to the proxy
+    # Service. When AISHIPBOX_USE_METRIC_AGGREGATOR is set, run the standalone
+    # metrics_aggregator.py on this group-0 node (same network as the proxy):
+    # it scrapes all 20 engine /metrics and re-exposes the merged result on one
+    # port (default 9100), so a single Prometheus target gets per-instance data.
+    # Kept as a separate script so the vendored proxy stays byte-identical to
+    # upstream.
+    if [ -n "$AISHIPBOX_USE_METRIC_AGGREGATOR" ]; then
+        metric_port="${AISHIPBOX_METRIC_AGGREGATOR_PORT:-9100}"
+        echo "[run] AISHIPBOX_USE_METRIC_AGGREGATOR set -> starting metrics aggregator on :$metric_port"
+        python3 "$here/metrics_aggregator.py" --port "$metric_port" &
+    fi
 fi
 
 case "$AISHIPBOX_NODE_RANK" in
