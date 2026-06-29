@@ -56,8 +56,13 @@ node/group counts, then `exec`s the per-role launcher for `AISHIPBOX_NODE_RANK`.
 - **Rank 0 is leader / API host / proxy host.** Higher ranks run `--headless`
   and rendezvous with rank 0's `--data-parallel-address`.
 - **Group 0 = traffic-routable ranks.** ModelArts routes service traffic only to
-  `ranks 0..AISHIPBOX_GROUP0_SIZE-1`. Any rank with an API server (or the proxy)
-  must be in group 0; headless workers must be outside it. `run.sh` enforces this.
+  `ranks 0..AISHIPBOX_GROUP0_SIZE-1`, load-balancing across *all* of them. Any
+  rank with an API server (or the proxy) must be in group 0; headless workers
+  must be outside it. `run.sh` enforces this. **PD layouts require group 0 to be
+  exactly one node** (rank 0) — the proxy keeps its own least-load state
+  (`active_tokens` heap), so two group-0 proxies would each pick "least-loaded"
+  blind to the other's in-flight requests and the load balancing collapses. One
+  group-0 node ⇒ one proxy overall; `run.sh` fails fast if `GROUP0_SIZE != 1`.
 - **NIC resolved per node** from its own IP via `ifconfig`, bound through
   `HCCL_SOCKET_IFNAME` / `GLOO_SOCKET_IFNAME` / `TP_SOCKET_IFNAME`.
 - **Multi-node DP, per-node API server:** use `--data-parallel-rank`, NOT
