@@ -1,21 +1,23 @@
 #!/bin/sh
-# GLM-5.2-w8a8 P-D disaggregation on 4x Atlas 800 A3 (16 NPU/node), external
-# online DP, 1 prefill engine spanning 2 nodes + 1 decode engine spanning 2
-# nodes (layout 1x2p1x2d), aligned with the official GLM-5.2 A3 PD guide:
-#   rank 0 -> prefill master: 1 vllm instance (DP=2, TP=16, 16 NPU),
-#             API port 9081, kv_producer, kv_port=30000, engine_id=0
-#   rank 1 -> prefill worker:  1 vllm instance (dp-rank 1), rendezvous with rank 0
-#   rank 2 -> decode master:  4 vllm instances (DP=8, TP=4, 4 NPU each),
-#             API ports 9900..9903, kv_consumer, kv_port=30100, engine_id=1
-#   rank 3 -> decode worker:  4 vllm instances (dp-ranks 4..7), rendezvous w/ rank 2
+# DeepSeek-V4-Flash P-D disaggregation on A3 (16 NPU/node), layout 2p2d:
+# 2 INDEPENDENT single-node prefill engines + 2 INDEPENDENT single-node decode
+# engines, 4 physical nodes. Each engine is its own Mooncake KV endpoint.
+# External online DP (each DP worker is its own API server).
 #
-# Each instance is its own API server; proxy load-balances across all 10
-# endpoints. kv_connector_extra_config is identical on both roles:
-#   {"prefill": {"dp_size": 2, "tp_size": 16}, "decode": {"dp_size": 8, "tp_size": 4}}
+# Topology (rank table order):
+#   rank 0 -> prefill 0  (DP=4 x TP=4, 4 instances 7100..7103, kv_producer, engine_id=0)
+#   rank 1 -> prefill 1  (DP=4 x TP=4, 4 instances 7100..7103, kv_producer, engine_id=2)
+#   rank 2 -> decode  0  (DP=16 x TP=1, 16 instances 7100..7115, kv_consumer, engine_id=1)
+#   rank 3 -> decode  1  (DP=16 x TP=1, 16 instances 7100..7115, kv_consumer, engine_id=3)
+# kv_port stays 36000 (prefill) / 36100 (decode): engines are on different nodes,
+# so only engine_id must be unique. Prefill engine_ids 0,2 / decode engine_ids 1,3
+# are disjoint. The proxy fans HTTP across all 8 prefill + 32 decode endpoints.
+# Connector: MooncakeHybridConnector; kv_connector_extra_config {prefill dp4/tp4,
+# decode dp16/tp1} on every engine.
 #
-# Deviations from the guide: kv_port 30000/30100 kept from upstream;
-# served-model-name glm-52; model path /root/model.
-#   https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/GLM5.2.html
+# DERIVED from the verified 1p1d layout (same per-engine sizing); multiplying
+# independent engines is NOT separately documented upstream. See meta.yaml.
+#   https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/DeepSeek-V4-Flash.html
 #
 # Usage (all four nodes run this same ModelArts service command):
 #   sh /root/script/run.sh
@@ -26,7 +28,7 @@ here=$(cd "$(dirname "$0")" && pwd)
 . "$here/setup_rank_env.sh"
 
 if [ "$AISHIPBOX_NNODES" != 4 ]; then
-    echo "[run] expected 4 nodes, rank table has $AISHIPBOX_NNODES" >&2
+    echo "[run] expected 4 nodes (2 prefill + 2 decode), rank table has $AISHIPBOX_NNODES" >&2
     exit 1
 fi
 
@@ -59,10 +61,12 @@ if [ "$AISHIPBOX_NODE_RANK" -eq 0 ]; then
     sh "$here/run_proxy.sh" &
 fi
 
+# engine_id is globally unique: prefill engines get even ids (0,2,...), decode
+# engines get odd ids (1,3,...), derived from this node's index within its role.
 case "$AISHIPBOX_NODE_RANK" in
-    0) exec "$here/run_prefill_node0.sh" ;;
-    1) exec "$here/run_prefill_node1.sh" ;;
-    2) exec "$here/run_decode_node0.sh" ;;
-    3) exec "$here/run_decode_node1.sh" ;;
+    0) ENGINE_ID=0 exec "$here/run_prefill.sh" ;;
+    1) ENGINE_ID=2 exec "$here/run_prefill.sh" ;;
+    2) ENGINE_ID=1 exec "$here/run_decode.sh" ;;
+    3) ENGINE_ID=3 exec "$here/run_decode.sh" ;;
     *) echo "[run] unexpected AISHIPBOX_NODE_RANK=$AISHIPBOX_NODE_RANK (want 0..3)" >&2; exit 1 ;;
 esac
