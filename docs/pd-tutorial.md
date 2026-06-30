@@ -40,7 +40,7 @@ flowchart LR
 ```
 
 > 左边一个大箭头**一次性并行**吃完整段 prompt(算力密集),右边一串小步骤**逐字循环**、
-> 反复读 KV(访存密集)—— 这就是两个阶段最本质的差别。中间的虚线“KV cache 交接”,
+> 反复读 KV(访存密集)——这就是两个阶段最本质的差别。中间的虚线“KV cache 交接”,
 > 正是后面 PD 分离要跨引擎传输的那份数据。
 
 ### 为什么合并部署会互相拖累
@@ -58,8 +58,8 @@ flowchart LR
 
 把两段拆开,各管各的:
 
-- **Prefill 引擎**专注处理 prompt、产出 KV cache,按“算力密集”去调优和扩容;
-- **Decode 引擎**专注消费 KV、逐字出 token,按“访存密集”去调优和扩容;
+- **Prefill 引擎**专注处理 prompt、产出 KV cache,按“算力密集”去调优和扩容；
+- **Decode 引擎**专注消费 KV、逐字出 token,按“访存密集”去调优和扩容；
 - 一个请求先在 prefill 引擎算完 KV,再把 KV **传输**给 decode 引擎继续生成。
 
 这样两边互不抢占、各自按自己的瓶颈独立扩缩容,延迟和吞吐都更可控。
@@ -150,8 +150,8 @@ flowchart TB
     end
 ```
 
-- **部署方式 A**:**4 个独立引擎**(2P+2D),每个引擎单独占 1 台机器;适合“单台放得下、想多堆几个实例提吞吐”。
-- **部署方式 B**:只有 **2 个引擎**(1P+1D),但每个横跨 2 台机器(单台放不下);适合“单个引擎太大、必须跨节点”。
+- **部署方式 A**:**4 个独立引擎**(2P+2D),每个引擎单独占 1 台机器；适合“单台放得下、想多堆几个实例提吞吐”。
+- **部署方式 B**:只有 **2 个引擎**(1P+1D),但每个横跨 2 台机器(单台放不下)；适合“单个引擎太大、必须跨节点”。
 
 两者机器数一样,部署方式却天差地别——所以光说“几台机器”远远不够,得能把“几个 P、几个 D、
 每个占几节点”说清楚。为此我们约定了一套 layout 命名法,见文末 FAQ。
@@ -199,29 +199,181 @@ flowchart TB
 
 1. **在 prefill 节点**跑 `launch_online_dp.py`(`--dp-address` 填本节点 IP)。它按
    `--dp-size-local` **fork 出 4 个进程**,每个进程 `bash run_dp_template.sh …` 起一个
-   `vllm serve`(`kv_role=kv_producer`,API 端口 7100..7103)。
+   `vllm serve`(`kv_role=kv_producer`,API endpoint :7100..7103)。
 2. **在 decode 节点**同样跑一遍(`--dp-address` 填 decode 节点 IP),fork 出 16 个
-   `vllm serve`(`kv_role=kv_consumer`,API 端口 7100..7115)。
+   `vllm serve`(`kv_role=kv_consumer`,API endpoint :7100..7115)。
 3. **两侧 engine 全部起来后**,在 prefill 节点起 `load_balance_proxy_server_example.py`,
    把全部 P/D 的 API endpoint(4 个 prefill + 16 个 decode)用
    `--prefiller-hosts/--prefiller-ports`、`--decoder-hosts/--decoder-ports` 列进去。
 
 | 脚本 | 在哪跑 | 干什么 |
 |------|--------|--------|
-| `launch_online_dp.py` | prefill 节点、decode 节点各跑一次 | 编排器:按 `dp-size-local` fork N 个进程,各自分配 NPU / 端口 / dp-rank |
-| `run_dp_template.sh` | 被 `launch_online_dp.py` fork 调用 | 单实例模板:设环境变量 + `vllm serve`;靠 `kv_role` / `kv_port` / `engine_id` 区分 P/D |
+| `launch_online_dp.py` | prefill 节点、decode 节点各跑一次 | 编排器:按 `dp-size-local` fork N 个进程,各自分配 NPU / API endpoint / dp-rank |
+| `run_dp_template.sh` | 被 `launch_online_dp.py` fork 调用 | 单实例模板:设环境变量 + `vllm serve`；靠 `kv_role` / `kv_port` / `engine_id` 区分 P/D |
 | `load_balance_proxy_server_example.py` | engine 起来后,跑在 prefill 节点 | 把请求先发 P 再发 D,在所有 P/D 的 API endpoint 间负载均衡 |
 
 > 两点呼应前两章:① prefill 和 decode 用的是**同一个 `run_dp_template.sh`**,只改 `kv_role` /
-> `kv_port` / `engine_id` 区分生产者/消费者;② **KV cache 在 P/D 引擎间直接传输(走
+> `kv_port` / `engine_id` 区分生产者/消费者；② **KV cache 在 P/D 引擎间直接传输(走
 > MooncakeHybridConnector),不过 proxy**——proxy 只转发 HTTP 请求。这正是第 1 章那张图里
 > “请求走 proxy、KV 走引擎间直连”的真实落地。
 
 ---
 
+## 第 4 章:怎么在 ModelArts 上跑
+
+把第 3 章那套官方脚本搬到 ModelArts(MA)上,有基础和优化两种做法。
+
+### 4.1 基础方案:MA 多角色部署,各角色一份脚本
+
+MA 提供**多角色部署**:你按角色逐个加“部署单元”,每个单元执行一个脚本。1P1D 就是:
+
+```mermaid
+flowchart TB
+    rt[("global rank table<br/>(集群就绪后每节点都有)")]
+
+    subgraph U1["部署单元 1 = Prefill"]
+        p["P 脚本:先解析 rank table 取 IP<br/>→ --dp-address = 本节点 IP"]
+        px["再起 proxy:解析 rank table<br/>→ --prefiller/--decoder-hosts = 全部 P/D 地址"]
+    end
+
+    subgraph U2["部署单元 2 = Decode"]
+        d["D 脚本:先解析 rank table 取 IP<br/>→ --dp-address = 本节点 IP"]
+    end
+
+    rt -.-> p
+    rt -.-> d
+    rt -.-> px
+```
+
+1. **第一个部署单元指定为 P**,执行 prefill 脚本(`--dp-address` 填本节点 IP);
+2. **第二个部署单元指定为 D**,执行 decode 脚本；
+3. 在第一个部署单元里**再起 proxy**,它要列出**所有 P/D 节点的地址**。
+
+这些 IP(本节点的、所有 P/D 的)MA 都是**运行时才分配**的,所以脚本不能写死。需要在真正的启动命令之前,先加一段脚本去 **global rank table** 里解析出 IP 再注入。
+
+### 4.2 优化方案: 提供一个适配骨架，把官方脚本包裹一下
+
+我们可以将解析逻辑**收敛到一处**、角色**按 rank 自动分发**——**所有节点下发同一条 `sh run.sh`** 即可。
+
+```mermaid
+flowchart TB
+    Start(["每个节点都执行<br/>sh run.sh"]) --> Setup
+
+    subgraph Spine["setup_rank_env.sh"]
+        Setup["等 rank table 就绪 → 解析<br/>导出 AISHIPBOX_*"]
+        Setup --> Vars["AISHIPBOX_NODE_RANK 本节点 rank<br/>AISHIPBOX_CURRENT_ADDR 本节点 IP<br/>AISHIPBOX_ADDR_&lt;rank&gt; 各 rank 的 IP"]
+    end
+
+    Vars --> Dispatch{"run.sh 按 NODE_RANK 分发"}
+    Dispatch -->|"rank 0"| R0["run_prefill_node0.sh + run_proxy.sh"]
+    Dispatch -->|"rank 1"| R1["run_decode_node0.sh"]
+
+    R0 --> P["prefill engine<br/>--dp-address = $AISHIPBOX_CURRENT_ADDR"]
+    R0 --> PX["proxy<br/>--prefiller-hosts = $AISHIPBOX_ADDR_0<br/>--decoder-hosts = $AISHIPBOX_ADDR_1"]
+    R1 --> D["decode engine<br/>--dp-address = $AISHIPBOX_CURRENT_ADDR"]
+```
+
+对应 4.1 的两点:
+
+- **解析逻辑收敛到一处。** 不再每份脚本各写一遍——`setup_rank_env.sh` 统一解析 rank table,
+  导出 `AISHIPBOX_CURRENT_ADDR`(本节点 IP)和 `AISHIPBOX_ADDR_<rank>`(各 rank 的 IP)。
+  各角色脚本直接用变量:本节点 `--dp-address` 填 `$AISHIPBOX_CURRENT_ADDR`,proxy 的
+  `--prefiller-hosts` / `--decoder-hosts` 从 `$AISHIPBOX_ADDR_0` / `$AISHIPBOX_ADDR_1` 拼出来。
+- **角色不用逐单元指定。** `run.sh` 按 `AISHIPBOX_NODE_RANK` 做 `case` 分发:rank 0 → prefill
+  (并在后台起 proxy),rank 1 → decode。同一条命令,落在哪个 rank 就自动当哪个角色。
+
+> 一条约束:proxy 必须落在能收外部流量的节点。MA 只把服务流量路由到 **group 0**,本仓库
+> 约定 group 0 只含 rank 0 这一个节点,所以 proxy 跟 prefill 一起跑在 rank 0 上。(细节见
+> [`design.md`](design.md)。)
+
+一句话:**官方脚本本身不动,spine 只是把“解析 rank table”收敛进 `setup_rank_env.sh`、再用
+`run.sh` 按 rank 自动分发**——基础方案里那份重复的解析逻辑和逐单元分角色,就都省掉了。
+
+### 4.3 动手:搭一个最小骨架,再装进官方脚本
+
+下面把 4.2 的 spine 亲手搭一遍。骨架只有两个我们自己写的文件,其余直接复用第 3 章的官方脚本。
+
+> 这里是**教学精简版**,只为讲透核心逻辑；本仓库 `template/` 里是完整版(带超时、日志、
+> 更多变量)。
+
+**第 1 步:`setup_rank_env.sh`——等 rank table 就绪,只导出本次要用的变量。**
+
+```sh
+#!/bin/sh
+# source 我(别用 && 链,导出的变量会随子 shell 消失)
+RANK_TABLE=/user/global/config/global_rank_table.json
+
+# 1. 等 ModelArts 写好 rank table(status=completed)
+while [ "$(python3 -c "import json;print(json.load(open('$RANK_TABLE')).get('status',''))" 2>/dev/null)" != "completed" ]; do
+    echo "[rank-env] 等待 rank table..."; sleep 2
+done
+
+# 2. 用本机 IP 在扁平节点列表里定位自己的 rank,导出本次要用的几个变量
+eval "$(python3 - <<'PY'
+import json, subprocess
+servers = [s for g in json.load(open("/user/global/config/global_rank_table.json"))["server_group_list"]
+             for s in g["server_list"]]
+my_ip = subprocess.check_output(["hostname", "-I"]).split()[0].decode()
+rank  = next(i for i, s in enumerate(servers) if s["server_ip"] == my_ip)
+print(f"export AISHIPBOX_NODE_RANK={rank}")
+print(f"export AISHIPBOX_CURRENT_ADDR={servers[rank]['server_ip']!r}")
+for i, s in enumerate(servers):
+    print(f"export AISHIPBOX_ADDR_{i}={s['server_ip']!r}")
+PY
+)"
+```
+
+**第 2 步:`run.sh`——按 rank 分角色,直接调 `launch_online_dp.py`。**
+
+```sh
+#!/bin/sh
+here=$(cd "$(dirname "$0")" && pwd)
+. "$here/setup_rank_env.sh"          # source,导出 AISHIPBOX_*
+
+case "$AISHIPBOX_NODE_RANK" in
+  0)   # prefill,并在后台拉起 proxy
+    sh "$here/run_proxy.sh" &
+    exec python3 "$here/launch_online_dp.py" \
+        --template "$here/run_dp_template_prefill.sh" \
+        --dp-size 4 --tp-size 4 --dp-size-local 4 \
+        --dp-address "$AISHIPBOX_CURRENT_ADDR" --vllm-start-port 7100 ;;
+  1)   # decode
+    exec python3 "$here/launch_online_dp.py" \
+        --template "$here/run_dp_template_decode.sh" \
+        --dp-size 16 --tp-size 1 --dp-size-local 16 \
+        --dp-address "$AISHIPBOX_CURRENT_ADDR" --vllm-start-port 7100 ;;
+esac
+```
+
+**第 3 步:把官方脚本复制进来。** 骨架就上面两个文件,剩下的直接用第 3 章那套官方脚本,
+逻辑不用改:
+
+- `launch_online_dp.py`、`run_dp_template.sh`(复制成 `run_dp_template_prefill.sh` /
+  `run_dp_template_decode.sh`,各自填好 `kv_role` / `kv_port` / `engine_id`);
+- `load_balance_proxy_server_example.py`(proxy 本体),再写一个一行的 `run_proxy.sh`,
+  用 `$AISHIPBOX_ADDR_0`(P)、`$AISHIPBOX_ADDR_1`(D)拼出 `--prefiller-hosts` /
+  `--decoder-hosts`。
+
+装好后一个 layout 目录长这样,所有节点下发同一条 `sh run.sh` 即可:
+
+```
+run.sh                                 # 骨架:按 rank 分角色(自己写)
+setup_rank_env.sh                      # 骨架:解析 rank table(自己写)
+run_proxy.sh                           # 骨架:拼 P/D 地址起 proxy(自己写)
+launch_online_dp.py                    # 官方:fork 多实例
+run_dp_template_prefill.sh             # 官方模板:kv_producer
+run_dp_template_decode.sh              # 官方模板:kv_consumer
+load_balance_proxy_server_example.py   # 官方:proxy
+```
+
+骨架(自己写的 3 个)负责“解析 + 分角色 + 拼地址”,引擎和 proxy 的实际逻辑全是官方脚本——
+换个模型 / 拓扑,通常只动骨架里的 `case` 和 `launch_online_dp.py` 参数。
+
+---
+
 ## FAQ
 
-### 我们怎么给一个 layout 命名?
+### 我们怎么给一个 layout 命名？
 
 > 这不是官方标准,而是**本仓库为了把拓扑写清楚而约定的命名法**。
 
