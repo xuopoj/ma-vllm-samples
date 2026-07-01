@@ -4,7 +4,7 @@
 ## 第 1 章:什么是 PD 分离部署
 
 **一句话:PD 分离就是把 LLM 推理的两个阶段——prefill 和 decode——拆到两组独立的
-引擎(通常是两组机器)上分别跑,而不是挤在同一批卡上。**
+引擎(通常是两组机器)上分别跑,而不是挤在同样的节点上。**
 
 要理解为什么这么拆,先看这两个阶段本质上有多不一样。
 
@@ -13,23 +13,22 @@
 一次请求的生成,天然分成前后两段:
 
 - **Prefill(预填充)**:把整个 prompt 一次性喂进模型,**并行**算出所有输入 token 的
-  KV cache,并吐出第一个输出 token。prompt 越长,这一步的矩阵乘越大——它**吃算力**
-  (compute-bound),batch 稍微一大就能把 NPU 算力打满。
+  KV cache,并吐出第一个输出 token。这一步的工作量随 prompt 长度增长。
 
 - **Decode(解码)**:基于已经算好的 KV cache,**一次只产 1 个 token**,然后把它接回
-  输入再产下一个,自回归地循环到结束。每一步的计算量都很小,真正的瓶颈是反复读取
-  KV cache 和权重——它**吃访存/显存带宽**(memory-bound),算力大量闲置。
+  输入再产下一个,自回归地循环到结束,直到生成完成。
 
-换句话说,两个阶段的资源画像几乎是**相反**的:一个缺算力,一个缺带宽。
+换句话说,两个阶段的行为方式截然不同:一个**一次性并行**吃完整段 prompt,一个**逐字循环**
+慢慢往外产 token。
 
 ```mermaid
 flowchart LR
-    subgraph P["Prefill 预填充(吃算力,compute-bound)"]
+    subgraph P["Prefill 预填充(一次性并行)"]
         direction TB
         prompt["整段 prompt<br/>t1 t2 t3 … tn"] -->|"一次性并行"| pkv["算出全部 token 的 KV cache<br/>+ 第 1 个输出 token"]
     end
 
-    subgraph D["Decode 解码(吃带宽,memory-bound)"]
+    subgraph D["Decode 解码(逐字自回归)"]
         direction TB
         d1["读 KV → 产 1 个 token"] --> d2["读 KV → 产 1 个 token"]
         d2 --> d3["读 KV → 产 1 个 token"]
@@ -39,30 +38,30 @@ flowchart LR
     pkv -.->|"KV cache 交接"| d1
 ```
 
-> 左边一个大箭头**一次性并行**吃完整段 prompt(算力密集),右边一串小步骤**逐字循环**、
-> 反复读 KV(访存密集)——这就是两个阶段最本质的差别。中间的虚线“KV cache 交接”,
-> 正是后面 PD 分离要跨引擎传输的那份数据。
+> 左边一个大箭头**一次性并行**吃完整段 prompt,右边一串小步骤**逐字循环**往外产 token
+> ——这就是两个阶段最本质的差别。中间的虚线“KV cache 交接”,正是后面 PD 分离要跨引擎
+> 传输的那份数据。
 
 ### 为什么合并部署会互相拖累
 
-如果同一批卡既做 prefill 又做 decode(混合引擎),问题就来了:
+如果同一批卡既做 prefill 又做 decode(混合引擎),核心问题是:**prefill 任务会插进正在进行的
+decode 过程,带来低效和额外延迟**。直接受影响的就是两个关键指标——**TTFT(首字延迟)和
+TPOT(每字延迟)**,而 PD 分离的目标正是优化它们。
 
-- **互相抢、互相堵**:一个长 prompt 的 prefill 占满算力时,正在逐字生成的 decode 请求
-  会被卡住——已经在跟你对话的用户突然感觉“吐字卡顿”。反过来,decode 占着卡也会拖慢
-  新请求的首字响应。两个关键延迟指标(TTFT 首字延迟、TPOT 每字延迟)互相干扰。
-
-- **配比必然浪费**:两阶段需求相反,放一起就只能折中一套并行/批处理配置,结果是
-  prefill 嫌带宽不够、decode 嫌算力用不上,哪一方都没调到最优。
+- **两阶段挤在一起会互相拖累**:一份混合引擎要同时兼顾“吃 prompt”和“逐字生成”,prefill
+  一插进来,正在生成的请求就被拖慢,TTFT / TPOT 都不稳。
+- **没法各自调优**:prefill 和 decode 想要的并行策略、批处理配置并不一样,挤在一个引擎里
+  只能用一套折中配置,两边都调不到最优。
 
 ### PD 分离怎么解决
 
 把两段拆开,各管各的:
 
-- **Prefill 引擎**专注处理 prompt、产出 KV cache,按“算力密集”去调优和扩容；
-- **Decode 引擎**专注消费 KV、逐字出 token,按“访存密集”去调优和扩容；
+- **Prefill 引擎**专注处理 prompt、产出 KV cache,单独调自己的并行策略和实例数；
+- **Decode 引擎**专注消费 KV、逐字出 token,也单独调自己的并行策略和实例数；
 - 一个请求先在 prefill 引擎算完 KV,再把 KV **传输**给 decode 引擎继续生成。
 
-这样两边互不抢占、各自按自己的瓶颈独立扩缩容,延迟和吞吐都更可控。
+这样两边互不干扰、各自独立调优和扩缩容,TTFT / TPOT 和吞吐都更可控。
 
 ### proxy(请求路由)
 
@@ -166,9 +165,11 @@ flowchart TB
 
 参考:
 [DeepSeek-V4-Flash 模型页](https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/DeepSeek-V4-Flash.html)
-(engine 启动)和
+(engine 启动)、
 [Mooncake 多节点 PD 页](https://docs.vllm.ai/projects/ascend/en/latest/tutorials/features/pd_disaggregation_mooncake_multi_node.html)
-(proxy)。
+(proxy),以及
+[PD 分离设计文档](https://docs.vllm.ai/projects/ascend/en/latest/developer_guide/Design_Documents/disaggregated_prefill.html)
+(机制:请求流、KV P2P 传输、connector)。
 
 ### 脚本关系与执行顺序
 
@@ -286,21 +287,20 @@ flowchart TB
 > 约定 group 0 只含 rank 0 这一个节点,所以 proxy 跟 prefill 一起跑在 rank 0 上。(细节见
 > [`design.md`](design.md)。)
 
-一句话:**官方脚本本身不动,spine 只是把“解析 rank table”收敛进 `setup_rank_env.sh`、再用
+一句话:**官方脚本本身不动, 把“解析 rank table”收敛进 `setup_rank_env.sh`、再用
 `run.sh` 按 rank 自动分发**——基础方案里那份重复的解析逻辑和逐单元分角色,就都省掉了。
 
-### 4.3 动手:搭一个最小骨架,再装进官方脚本
+### 4.3 完成一个PD分离部署的适配
 
-下面把 4.2 的 spine 亲手搭一遍。骨架只有两个我们自己写的文件,其余直接复用第 3 章的官方脚本。
+先写两个入口和分发的脚本文件,其余直接复用第 3 章的官方脚本。
 
-> 这里是**教学精简版**,只为讲透核心逻辑；本仓库 `template/` 里是完整版(带超时、日志、
+> 这里是**精简版**,只为讲透核心逻辑；本仓库 `template/` 里是完整版(带超时、日志、
 > 更多变量)。
 
-**第 1 步:`setup_rank_env.sh`——等 rank table 就绪,只导出本次要用的变量。**
+**第 1 步:`setup_rank_env.sh`——等 rank table 就绪。**
 
 ```sh
 #!/bin/sh
-# source 我(别用 && 链,导出的变量会随子 shell 消失)
 RANK_TABLE=/user/global/config/global_rank_table.json
 
 # 1. 等 ModelArts 写好 rank table(status=completed)
@@ -371,11 +371,17 @@ load_balance_proxy_server_example.py   # 官方:proxy
 
 ---
 
+## 第 5 章:MA 实操演示
+
+演示
+
+---
+
 ## FAQ
 
 ### 我们怎么给一个 layout 命名？
 
-> 这不是官方标准,而是**本仓库为了把拓扑写清楚而约定的命名法**。
+> 没有找到官方的命名规范，仅供参考。
 
 我们用 **`<A>x<B>p<C>x<D>d`** 来命名一个 PD 拓扑:
 
@@ -392,3 +398,27 @@ load_balance_proxy_server_example.py   # 官方:proxy
 | `1x2p1x2d`(第 2 章部署方式 B) | 1 个跨 2 节点 P + 1 个跨 2 节点 D | 1 × 2 | 1 × 2 | 4 | 1P + 1D = **2** |
 
 `2p2d` 和 `1x2p1x2d` 总节点数都是 4,独立引擎却是 4 vs 2——命名法的作用就是把这种差别一眼写明白。
+
+### 部署单元怎么配？
+
+MA 只会把请求发到**第一个部署单元**(在 rank table 里就是**第一个 server group**)。所以思路是:
+**让第一个部署单元只放一个节点,并在这个节点上起 proxy**。这样所有外部请求都先到这唯一的
+proxy,再由它分发到全部 P/D——既符合 MA 的路由规则,也避免出现多个 proxy 各自为政、负载
+均衡互相打架。其余节点(引擎)放到后面的部署单元里即可。
+
+### 健康检查怎么搞？
+
+proxy 本身不聚合后端健康检查——它只代理请求。需要考虑检查所有启动的推理引擎实例。
+
+### metrics 如何采集？
+
+vLLM 的 `/metrics` 是**每个实例各自暴露**的(每个 API server 一份),而 proxy **不汇总**这些
+指标。所以思路是:能直连各实例时,分别抓它们的 `/metrics`；当外部只能经 proxy 访问(如 K8s
+只路由到 proxy)时,在能同时访问所有实例的节点上单起一个**聚合器**,把各实例的指标抓回来合并、
+再统一对外暴露一个端点给 Prometheus。
+
+### 基于 MAS 部署的场景能适配吗？
+
+**能。** MAS 要求**只有一条统一的启动命令**——这正好对上本方案“每个节点都跑同一条 `run.sh`、
+靠 rank 自分角色”的设计。而且对接推理 2.0 后,**每个节点就是一个部署单元**,天然满足上面那条
+“第一个部署单元只含一个节点”的要求(把 proxy 所在的那个节点排在第一个单元即可)。

@@ -1,14 +1,5 @@
 # pd-tutorial-example —— 教学配套脚本(dsv4-flash 1P1D)
 
-这是 [`../pd-tutorial.md`](../pd-tutorial.md) **第 4.3 节**的配套示例:把那套最小骨架真正落成
-一组可读的脚本,演示「spine 解析 rank table + 按 rank 分角色 → 调官方 `launch_online_dp.py`
-→ 起官方 proxy」的完整链路。以 DeepSeek-V4-Flash 1P1D(rank 0 = prefill DP=4/TP=4,
-rank 1 = decode DP=16/TP=1)为例。
-
-> **这是教学精简版,不是生产脚本。** 为了讲清楚结构,这里的 `setup_rank_env.sh` 砍掉了超时、
-> 日志、pod 匹配等;engine 模板也只保留关键 `vllm serve` 参数。**生产级、真机验证过的完整版**
-> 见 [`../../models/deepseekv4-flash-a3/1p1d/`](../../models/deepseekv4-flash-a3/1p1d/)。
-
 ## 文件构成
 
 | 文件 | 来源 | 作用 |
